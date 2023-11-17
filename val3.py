@@ -43,35 +43,40 @@ def calc_min_minute(url):
     soup = BeautifulSoup(res2.text, "html.parser")
     table = soup.find('div', id='tabs_color')
 
-    ret_lis = []
-    elements = table.find_all('tr')
+    try:
+        ret_lis = []
+        elements = table.find_all('tr')
 
-    for i in elements:
-        candidate_list = i.find_all('p', class_="candidate_list_txt")
+        for i in elements:
+            candidate_list = i.find_all('p', class_="candidate_list_txt")
 
-        required_time = candidate_list[0].find('span').text.split('（')[-1][:-1]
+            required_time = candidate_list[0].find(
+                'span').text.split('（')[-1][:-1]
 
-        hour = 0
-        if '時間' in required_time:
-            hour = int(required_time.split('時間')[0])
-            t_minute = required_time.split('時間')[1][:-1]
-            if t_minute == '':
-                minute = 0
+            hour = 0
+            if '時間' in required_time:
+                hour = int(required_time.split('時間')[0])
+                t_minute = required_time.split('時間')[1][:-1]
+                if t_minute == '':
+                    minute = 0
+                else:
+                    minute = int(required_time.split('時間')[1][:-1])
             else:
-                minute = int(required_time.split('時間')[1][:-1])
-        else:
-            minute = int(required_time[:-1])
+                minute = int(required_time[:-1])
 
-        required_time = hour*60 + minute
-        transfer_count = int(candidate_list[1].find('span').text[:-1])
+            required_time = hour*60 + minute
+            transfer_count = int(candidate_list[1].find('span').text[:-1])
 
-        ret_lis.append([transfer_count, required_time])
+            ret_lis.append([transfer_count, required_time])
 
-    ret_lis = np.array(ret_lis)
-    min_trans = ret_lis[ret_lis[:, 0] == np.min(ret_lis[:, 0])]
-    min_minute = min_trans[min_trans[:, 1] == np.min(min_trans[:, 1])][0]
+        ret_lis = np.array(ret_lis)
+        min_trans = ret_lis[ret_lis[:, 0] == np.min(ret_lis[:, 0])]
+        min_minute = min_trans[min_trans[:, 1] == np.min(min_trans[:, 1])][0]
 
-    return min_minute
+        return min_minute
+
+    except AttributeError:
+        return False
 
 
 def ret_min_minute(from_, to_):
@@ -80,20 +85,40 @@ def ret_min_minute(from_, to_):
     min_minute = calc_min_minute(ret_res_url(from_station,
                                              to_station))
 
-    return min_minute
+    if min_minute is False:
+        return False
+    else:
+        return min_minute
 
 
 # %%
 to_stations = ['六本木', '六本木一丁目', '乃木坂', '赤坂']
-from_stations = pd.read_csv('staion_price.csv')['station']
+staion_price = pd.read_csv('staion_price.csv')
+pre_df = pd.read_csv('trans_min_price.csv')
 # %%
-to_ = to_stations[0]
-from_ = from_stations[0]
+data_list = []
+for to_ in to_stations:
+    for j in tqdm(range(len(staion_price))):
+        from_ = staion_price.iloc[j]['station']
+        line = staion_price.iloc[j]['line']
+        price = staion_price.iloc[j]['price']
 
-min_minute = ret_min_minute(from_, to_)
-# %%
-pd.read_csv('from_to_min.csv')
-# %%
-for i in to_stations:
-    for j in tqdm(from_stations):
-        min_minute = ret_min_minute(j, i)
+        condition01 = pre_df['line'] == line
+        condition02 = pre_df['price'] == price
+        condition03 = pre_df['from'] == from_
+        condition04 = pre_df['to'] == to_
+
+        if np.sum(condition01*condition02*condition03*condition04) == 0:
+            min_minute = ret_min_minute(from_, to_)
+
+            if min_minute is False:
+                pass
+            else:
+                data_list.append(
+                    [line, price, from_, to_, min_minute[0], min_minute[1]])
+
+        if j % 100 == 0:
+            temp_df = pd.DataFrame(data_list,
+                                   columns=['line', 'price', 'from', 'to', 'trans', 'min'])
+            pd.concat([pre_df, temp_df]).reset_index(
+                drop=True).to_csv('trans_min_price.csv', index=False)
