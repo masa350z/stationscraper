@@ -98,14 +98,15 @@ for to_ in to_list:
 
             min_minute = ret_min_minute(ret_url)
 
-            temp_df = pd.DataFrame([[line, from_, to_, min_minute[0], min_minute[1]]])
+            temp_df = pd.DataFrame([[line, from_, to_,
+                                     min_minute[0], min_minute[1]]])
 
             ret_df = pd.concat([ret_df, temp_df], axis=0)
 
-            #ret_df = ret_df.reset_index(drop=True)
-            #ret_df.columns = ['from', 'to', 'trans', 'req_min']
+            ret_df = ret_df.reset_index(drop=True)
+            ret_df.columns = ['line', 'from', 'to', 'trans', 'req_min']
 
-            ret_df.to_csv('from_to_min2.csv', index=False)
+            ret_df.to_csv('from_to_min.csv', index=False)
         except Exception as e:
             print('some error')
             print(e)

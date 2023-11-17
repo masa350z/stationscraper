@@ -5,7 +5,6 @@ from bs4 import BeautifulSoup
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
-# %%
 
 
 def ret_station_name(station_name):
@@ -16,7 +15,7 @@ def ret_station_name(station_name):
               'name': station_name}
 
     res = requests.get(station_url, params=params).json()
-    if type(res['ResultSet']['Point']) == list:
+    if type(res['ResultSet']['Point']) is list:
         ret_name = res['ResultSet']['Point'][0]['Station']['Name']
     else:
         ret_name = res['ResultSet']['Point']['Station']['Name']
@@ -39,7 +38,7 @@ def ret_res_url(from_, to_):
     return ret_url
 
 
-def ret_min_minute(url):
+def calc_min_minute(url):
     res2 = requests.get(url)
     soup = BeautifulSoup(res2.text, "html.parser")
     table = soup.find('div', id='tabs_color')
@@ -73,35 +72,28 @@ def ret_min_minute(url):
     min_minute = min_trans[min_trans[:, 1] == np.min(min_trans[:, 1])][0]
 
     return min_minute
-# %%
 
 
-stations = pd.read_csv('from_to_min.csv')
-stations = stations[stations['4'] < 100].reset_index(drop=True)
-ret_df = pd.DataFrame({})
-#%%
-to_list = ['日本橋(東京都)']
-# %%
-for to_ in to_list:
-    for j in tqdm(range(len(stations))):
-        try:
-            line = stations.iloc[j][0]
-            from_ = stations.iloc[j][1]
+def ret_min_minute(from_, to_):
+    to_station = ret_station_name(to_)
+    from_station = ret_station_name(from_)
+    min_minute = calc_min_minute(ret_res_url(from_station,
+                                             to_station))
 
-            ret_url = ret_res_url(from_, to_)
+    return min_minute
 
-            min_minute = ret_min_minute(ret_url)
-
-            temp_df = pd.DataFrame([[line, from_, to_, min_minute[0], min_minute[1]]])
-
-            ret_df = pd.concat([ret_df, temp_df], axis=0)
-
-            #ret_df = ret_df.reset_index(drop=True)
-            #ret_df.columns = ['from', 'to', 'trans', 'req_min']
-
-            ret_df.to_csv('from_to_min3.csv', index=False)
-        except Exception as e:
-            print('some error')
-            print(e)
 
 # %%
+to_stations = ['六本木', '六本木一丁目', '乃木坂', '赤坂']
+from_stations = pd.read_csv('staion_price.csv')['station']
+# %%
+to_ = to_stations[0]
+from_ = from_stations[0]
+
+min_minute = ret_min_minute(from_, to_)
+# %%
+pd.read_csv('from_to_min.csv')
+# %%
+for i in to_stations:
+    for j in tqdm(from_stations):
+        min_minute = ret_min_minute(j, i)
