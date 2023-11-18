@@ -100,8 +100,8 @@ def ret_min_minute(from_, to_):
 
 # %%
 to_stations = ['六本木', '六本木一丁目', '乃木坂', '赤坂']
-staion_price = pd.read_csv('staion_price.csv')
-pre_df = pd.read_csv('trans_min_price.csv')
+staion_price = pd.read_csv('csv/staion_price.csv')
+pre_df = pd.read_csv('csv/to_roppongi/trans_min_price.csv')
 # %%
 data_list = []
 for to_ in to_stations:
@@ -128,4 +128,20 @@ for to_ in to_stations:
             temp_df = pd.DataFrame(data_list,
                                    columns=['line', 'price', 'from', 'to', 'trans', 'min'])
             pd.concat([pre_df, temp_df]).reset_index(
-                drop=True).to_csv('trans_min_price.csv', index=False)
+                drop=True).to_csv('csv/to_roppongi/trans_min_price.csv', index=False)
+# %%
+walk_min = {'六本木': 7,
+            '六本木一丁目': 17,
+            '乃木坂': 7,
+            '赤坂': 14}
+
+walk_min_lis = []
+for i in pre_df['to']:
+    walk_min_lis.append(walk_min[i])
+
+walk_min_lis = np.array(walk_min_lis) + np.array(pre_df['min'])
+walk_df = pd.DataFrame(walk_min_lis, columns=['train+walk_min'])
+# %%
+pd.concat([pre_df, walk_df], axis=1).to_csv(
+    'csv/to_roppongi/trans_min_price.csv', index=False)
+# %%
