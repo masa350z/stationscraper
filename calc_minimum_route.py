@@ -15,12 +15,15 @@ def ret_station_name(station_name):
               'name': station_name}
 
     res = requests.get(station_url, params=params).json()
-    if type(res['ResultSet']['Point']) is list:
-        ret_name = res['ResultSet']['Point'][0]['Station']['Name']
-    else:
-        ret_name = res['ResultSet']['Point']['Station']['Name']
+    try:
+        if type(res['ResultSet']['Point']) is list:
+            ret_name = res['ResultSet']['Point'][0]['Station']['Name']
+        else:
+            ret_name = res['ResultSet']['Point']['Station']['Name']
 
-    return ret_name
+        return ret_name
+    except KeyError:
+        return False
 
 
 def ret_res_url(from_, to_):
@@ -82,13 +85,17 @@ def calc_min_minute(url):
 def ret_min_minute(from_, to_):
     to_station = ret_station_name(to_)
     from_station = ret_station_name(from_)
-    min_minute = calc_min_minute(ret_res_url(from_station,
-                                             to_station))
 
-    if min_minute is False:
+    if to_station is False or from_station is False:
         return False
     else:
-        return min_minute
+        min_minute = calc_min_minute(ret_res_url(from_station,
+                                                 to_station))
+
+        if min_minute is False:
+            return False
+        else:
+            return min_minute
 
 
 # %%
