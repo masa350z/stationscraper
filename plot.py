@@ -1,7 +1,8 @@
+# %%
 import matplotlib.pyplot as plt
 import pandas as pd
 
-"""
+
 def plot_data(file_path, lat_min, lat_max, lng_min, lng_max, marker_size,
               resolution, cmap_min, cmap_max,
               alpha, output_filename,
@@ -34,7 +35,6 @@ def plot_data(file_path, lat_min, lat_max, lng_min, lng_max, marker_size,
     # 透明な背景で画像として保存
     plt.savefig(output_filename, dpi=100, transparent=True)
     plt.show()
-"""
 
 
 def plot_data2(price_file_path, min_file_path, output_filename,
@@ -63,16 +63,17 @@ def plot_data2(price_file_path, min_file_path, output_filename,
 
         y_ = filtered_data['lat']
         if i == 0:
-            mapcolor = 'OrRd'
+            mapcolor = 'YlOrRd'
             x_ = filtered_data['lng'] + 0.003
 
         else:
-            mapcolor = 'GnBu'
+            mapcolor = 'YlGnBu'
             x_ = filtered_data['lng'] - 0.003
 
         sc = ax.scatter(x_, y_,
-                        c=filtered_data[mode], cmap=mapcolor, marker='o', s=marker_size, alpha=maker_alpha,
-                        edgecolors='none')
+                        c=filtered_data[mode], cmap=mapcolor, marker='s', s=marker_size, alpha=maker_alpha,
+                        # edgecolors='none'
+                        )
         # plt.colorbar(sc, label=mode)
         # sc.set_clim(colormap_min, colormap_max)
 
@@ -90,9 +91,21 @@ def plot_data2(price_file_path, min_file_path, output_filename,
     plt.show()
 
 
-"""
+# %%
+# mode = 'min'
+mode = 'price'
+
+file_path = 'csv/to_roppongi/all_{}_code.csv'.format(mode)  # CSVファイルのパス
+# 保存する画像のファイル名
+output_filename = 'csv/to_roppongi/{}_visualization.png'.format(mode)
+mx_ = 7
+mn_ = 3
+
+plot_data(file_path, 35.5, 35.9, 139.4, 140,
+          220*5, (3840*2, 2160*2), mn_, mx_, 0.75, output_filename,
+          mode, mn_, mx_)
+# %%
 mode = 'min'
-# mode = 'price'
 
 file_path = 'csv/to_roppongi/all_{}_code.csv'.format(mode)  # CSVファイルのパス
 # 保存する画像のファイル名
@@ -100,17 +113,19 @@ output_filename = 'csv/to_roppongi/{}_visualization.png'.format(mode)
 mx_ = 60
 mn_ = 30
 
-plot_data(file_path, 35.3, 36, 139.3, 140,
-          200, (3840, 2160), mn_, mx_, 0.75, output_filename,
-          mode, 30, 60)
-"""
+plot_data(file_path, 35.5, 35.9, 139.4, 140,
+          220*5, (3840*2, 2160*2), mn_, mx_, 0.75, output_filename,
+          mode, mn_, mx_)
+# %%
 price_file_path = 'csv/to_roppongi/all_price_code.csv'
 min_file_path = 'csv/to_roppongi/all_min_code.csv'
 output_filename = 'csv/to_roppongi/visualization.png'
 
 plot_data2(price_file_path, min_file_path, output_filename,
-           35.3, 36, 139.3, 140,
-           (3840, 2160),
-           100, 0.75,
-           0, 7,
+           35.5, 35.9, 139.4, 140,
+           (3840*2, 2160*2),
+           220*2, 0.75,
+           3, 7,
            30, 60)
+
+# %%
