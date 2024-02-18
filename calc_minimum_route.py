@@ -145,3 +145,9 @@ walk_df = pd.DataFrame(walk_min_lis, columns=['train+walk_min'])
 pd.concat([pre_df, walk_df], axis=1).to_csv(
     'csv/to_roppongi/trans_min_price.csv', index=False)
 # %%
+temp_df = pd.DataFrame(data_list,
+                       columns=['line', 'price', 'from', 'to', 'trans', 'min'])
+pd.concat([pre_df, temp_df]).reset_index(
+    drop=True).to_csv('csv/to_shibuya/trans_min_price_2ldk.csv', index=False)
+
+# %%
