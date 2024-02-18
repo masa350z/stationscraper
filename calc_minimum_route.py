@@ -99,9 +99,9 @@ def ret_min_minute(from_, to_):
 
 
 # %%
-to_stations = ['六本木', '六本木一丁目', '乃木坂', '赤坂']
-staion_price = pd.read_csv('csv/staion_price.csv')
-pre_df = pd.read_csv('csv/to_roppongi/trans_min_price.csv')
+to_stations = ['渋谷']
+staion_price = pd.read_csv('csv/staion_price_2ldk.csv')
+pre_df = pd.read_csv('csv/to_shibuya/trans_min_price_2ldk.csv')
 # %%
 data_list = []
 for to_ in to_stations:
@@ -128,7 +128,7 @@ for to_ in to_stations:
             temp_df = pd.DataFrame(data_list,
                                    columns=['line', 'price', 'from', 'to', 'trans', 'min'])
             pd.concat([pre_df, temp_df]).reset_index(
-                drop=True).to_csv('csv/to_roppongi/trans_min_price.csv', index=False)
+                drop=True).to_csv('csv/to_shibuya/trans_min_price_2ldk.csv', index=False)
 # %%
 walk_min = {'六本木': 7,
             '六本木一丁目': 17,

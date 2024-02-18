@@ -109,8 +109,8 @@ mode = 'min'
 
 file_path = 'csv/to_roppongi/all_{}_code.csv'.format(mode)  # CSVファイルのパス
 # 保存する画像のファイル名
-output_filename = 'csv/to_roppongi/{}_visualization.png'.format(mode)
-mx_ = 60
+output_filename = 'csv/to_roppongi/{}_visualization_40.png'.format(mode)
+mx_ = 40
 mn_ = 30
 
 plot_data(file_path, 35.5, 35.9, 139.4, 140,
