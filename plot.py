@@ -95,11 +95,12 @@ def plot_data2(price_file_path, min_file_path, output_filename,
 # mode = 'min'
 mode = 'price'
 
-file_path = 'csv/to_roppongi/all_{}_code.csv'.format(mode)  # CSVファイルのパス
+# file_path = 'csv/to_roppongi/all_{}_code.csv'.format(mode)  # CSVファイルのパス
+file_path = 'csv/to_shibuya/trans_min_price_2ldk_filtered_code.csv'
 # 保存する画像のファイル名
-output_filename = 'csv/to_roppongi/{}_visualization.png'.format(mode)
-mx_ = 7
-mn_ = 3
+output_filename = 'csv/to_shibuya/{}_visualization.png'.format(mode)
+mx_ = 20
+mn_ = 0
 
 plot_data(file_path, 35.5, 35.9, 139.4, 140,
           220*5, (3840*2, 2160*2), mn_, mx_, 0.75, output_filename,
@@ -107,11 +108,10 @@ plot_data(file_path, 35.5, 35.9, 139.4, 140,
 # %%
 mode = 'min'
 
-file_path = 'csv/to_roppongi/all_{}_code.csv'.format(mode)  # CSVファイルのパス
 # 保存する画像のファイル名
-output_filename = 'csv/to_roppongi/{}_visualization_40.png'.format(mode)
-mx_ = 40
-mn_ = 30
+output_filename = 'csv/to_shibuya/{}_visualization.png'.format(mode)
+mx_ = 60
+mn_ = 0
 
 plot_data(file_path, 35.5, 35.9, 139.4, 140,
           220*5, (3840*2, 2160*2), mn_, mx_, 0.75, output_filename,
