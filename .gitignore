@@ -1,2 +1,4 @@
-settings.py
-csv/to_roppongi/mymap.psd
+.env
+__pycache__/
+*.pyc
+.DS_Store
