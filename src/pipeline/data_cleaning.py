@@ -8,8 +8,10 @@ def merge_station_info(station_csv_path: str, price_csv_path: str, output_path: 
     df_station = pd.read_csv(station_csv_path)
     df_price = pd.read_csv(price_csv_path)
 
+    print(df_station.head())
+    print(df_price.head())
+
     # 同じキー名に合わせるため、列名を揃えることを想定
-    # もともと 'station_price_2ldk.csv' に 'line', 'station', 'price' が入っている想定
     merged = pd.merge(df_station, df_price, on=['line', 'station'], how='left')
     merged.drop_duplicates(inplace=True)
     merged.to_csv(output_path, index=False)

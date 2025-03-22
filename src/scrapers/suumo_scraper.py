@@ -7,12 +7,29 @@ from tqdm import tqdm
 from src.config import SCRAPING_SLEEP_SEC, SCRAPING_RETRY_COUNT
 
 
-def scrape_suumo_2ldk_rent(pref_list, output_csv_path):
+def scrape_suumo_rent(pref_list, output_csv_path, room_type='one_room'):
     """
-    SUUMOの沿線×駅の家賃相場情報(2LDK)をスクレイピングしてCSVに保存する。
+    SUUMOの沿線×駅の家賃相場情報をスクレイピングしてCSVに保存する。
     pref_list: ['tokyo', 'kanagawa', 'saitama', 'chiba'] のような都道府県URL識別子リスト
     output_csv_path: 保存先CSVファイル
     """
+    room_type_index = {'one_room': '01',
+                       '1k': '02',
+                       '1dk': '02',
+                       '1ldk': '03',
+                       '2k': '03',
+                       '2dk': '03',
+                       '2ldk': '04',
+                       '3k': '04',
+                       '3dk': '04',
+                       '3ldk': '05',
+                       '4k': '05'}
+
+    # 辞書に無いroom_typeが指定された場合はエラーを出す
+    if room_type not in room_type_index:
+        valid_keys = ", ".join(room_type_index.keys())
+        raise ValueError(f"Unsupported room_type: '{room_type}'. Valid options: {valid_keys}")
+
     base_url = 'https://suumo.jp/chintai/soba/{}/ensen/'
 
     result = []
@@ -31,8 +48,7 @@ def scrape_suumo_2ldk_rent(pref_list, output_csv_path):
             if not line_href:
                 continue
 
-            # SUUMOの2LDK指定(mdKbn=04)パラメータを加える
-            full_url = 'https://suumo.jp' + line_href + '?mdKbn=04'
+            full_url = 'https://suumo.jp' + line_href + '?mdKbn=' + room_type_index[room_type]
             line_soup = _safe_get_soup(full_url)
             table = line_soup.find('table', class_='graphpanel_matrix')
             if not table:

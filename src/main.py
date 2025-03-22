@@ -2,7 +2,7 @@ import pandas as pd
 import os
 
 from src.scrapers.traveltowns_scraper import scrape_traveltowns_kanto
-from src.scrapers.suumo_scraper import scrape_suumo_2ldk_rent
+from src.scrapers.suumo_scraper import scrape_suumo_rent
 
 from src.apis.ekispert import get_minimum_route_info_between_stations
 from src.apis.google_maps import geocode_location
@@ -13,6 +13,7 @@ from src.pipeline.analysis import evaluate_and_split
 from src.pipeline.visualization import plot_scatter
 
 from src.config import WALK_MINUTES, MAX_TIME_DEFAULT
+from src.config import ROOM_TYPE
 
 
 def main():
@@ -29,30 +30,31 @@ def main():
     else:
         print("[1] 駅マスタCSVが既に存在します:", station_address_csv)
 
-    # 2. スクレイピング（SUUMO家賃2LDK）
-    station_price_csv = os.path.join(data_dir, "station_price_2ldk.csv")
+    # 2. スクレイピング（SUUMO家賃）
+    station_price_csv = os.path.join(data_dir, f"station_price_{ROOM_TYPE}.csv")
     if not os.path.exists(station_price_csv):
-        print("[2] SUUMOから家賃相場(2LDK)を取得...")
+        print(f"[2] SUUMOから家賃相場({ROOM_TYPE})を取得...")
         pref_list = ['tokyo', 'kanagawa', 'saitama', 'chiba']
-        scrape_suumo_2ldk_rent(pref_list, station_price_csv)
+        scrape_suumo_rent(pref_list, station_price_csv, room_type=ROOM_TYPE)
     else:
         print("[2] 家賃相場CSVが既に存在します:", station_price_csv)
 
     # 3. 駅マスタと家賃CSVを結合
-    merged_csv = os.path.join(data_dir, "output", "station_info.csv")
+    merged_csv = os.path.join(data_dir, "output", f"station_info_{ROOM_TYPE}.csv")
     if not os.path.exists(merged_csv):
         print("[3] 駅マスタと家賃をマージ...")
         merge_station_info(station_address_csv, station_price_csv, merged_csv)
     else:
-        print("[3] station_info.csv が既に存在:", merged_csv)
+        print(f"[3] station_info_{ROOM_TYPE}.csv が既に存在:", merged_csv)
 
     # 4. 各駅から特定目的地(例: 渋谷)までの所要時間をEkispertで取得 -> CSVにまとめる
-    route_csv = os.path.join(data_dir, "output", "route_info.csv")
-    if not os.path.exists(route_csv):
-        print("[4] Ekispertで所要時間を取得...")
-        _calculate_min_route(merged_csv, "渋谷", route_csv)
-    else:
-        print("[4] route_info.csv が既に存在:", route_csv)
+    for to_station in WALK_MINUTES.keys():
+        route_csv = os.path.join(data_dir, "output", f"route_info_{to_station}.csv")
+        if not os.path.exists(route_csv):
+            print("[4] Ekispertで所要時間を取得...")
+            _calculate_min_route(merged_csv, to_station, route_csv)
+        else:
+            print(f"[4] route_info_{to_station}.csv が既に存在:", route_csv)
 
     # 5. 徒歩時間を加算して train+walk_min を作成
     df_route = pd.read_csv(route_csv)
@@ -111,6 +113,7 @@ def _calculate_min_route(station_csv: str, to_station: str, output_csv: str) -> 
         if route_info is None:
             continue
         trans, minutes = route_info
+        print([line, price, from_station, to_station, trans, minutes])
         records.append([line, price, from_station, to_station, trans, minutes])
 
     out_df = pd.DataFrame(records, columns=['line', 'price', 'from', 'to', 'trans', 'min'])
