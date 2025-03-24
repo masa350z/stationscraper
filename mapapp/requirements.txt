@@ -1,0 +1,9 @@
+# Flask==2.2.3
+# Flask-Cors==3.0.10
+# psycopg2==2.9.6
+# requests==2.31.0
+Flask
+Flask-Cors
+psycopg2
+requests
+# 地図表示はLeaflet（JSライブラリ）をCDNで読み込むため、Python側では不要

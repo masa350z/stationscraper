@@ -8,11 +8,8 @@ from src.apis.ekispert import get_minimum_route_info_between_stations
 from src.apis.google_maps import geocode_location
 
 from src.pipeline.data_cleaning import merge_station_info, add_walking_time
-from src.pipeline.data_cleaning import filter_station_data
-from src.pipeline.analysis import evaluate_and_split
-from src.pipeline.visualization import plot_scatter
 
-from src.config import WALK_MINUTES, MAX_TIME_DEFAULT
+from src.config import WALK_MINUTES
 from src.config import ROOM_TYPE
 
 
@@ -31,7 +28,8 @@ def main():
         print("[1] 駅マスタCSVが既に存在します:", station_address_csv)
 
     # 2. スクレイピング（SUUMO家賃）
-    station_price_csv = os.path.join(data_dir, f"station_price_{ROOM_TYPE}.csv")
+    station_price_csv = os.path.join(
+        data_dir, "station_price", f"station_price_{ROOM_TYPE}.csv")
     if not os.path.exists(station_price_csv):
         print(f"[2] SUUMOから家賃相場({ROOM_TYPE})を取得...")
         pref_list = ['tokyo', 'kanagawa', 'saitama', 'chiba']
@@ -40,60 +38,73 @@ def main():
         print("[2] 家賃相場CSVが既に存在します:", station_price_csv)
 
     # 3. 駅マスタと家賃CSVを結合
-    merged_csv = os.path.join(data_dir, "output", f"station_info_{ROOM_TYPE}.csv")
+    merged_csv = os.path.join(
+        data_dir, "output", "price_info", f"price_by_station_{ROOM_TYPE}.csv")
     if not os.path.exists(merged_csv):
         print("[3] 駅マスタと家賃をマージ...")
         merge_station_info(station_address_csv, station_price_csv, merged_csv)
     else:
-        print(f"[3] station_info_{ROOM_TYPE}.csv が既に存在:", merged_csv)
+        print(f"[3] price_by_station_{ROOM_TYPE}.csv が既に存在:", merged_csv)
 
     # 4. 各駅から特定目的地(例: 渋谷)までの所要時間をEkispertで取得 -> CSVにまとめる
     for to_station in WALK_MINUTES.keys():
-        route_csv = os.path.join(data_dir, "output", f"route_info_{to_station}.csv")
+        route_csv = os.path.join(
+            data_dir, "output", "route_info", f"route_info_{to_station}.csv")
         if not os.path.exists(route_csv):
             print("[4] Ekispertで所要時間を取得...")
             _calculate_min_route(merged_csv, to_station, route_csv)
         else:
             print(f"[4] route_info_{to_station}.csv が既に存在:", route_csv)
 
-    # 5. 徒歩時間を加算して train+walk_min を作成
-    df_route = pd.read_csv(route_csv)
-    df_route = add_walking_time(df_route, WALK_MINUTES, to_col='to', time_col='min', new_col='train+walk_min')
-    df_route.to_csv(route_csv, index=False)
-    print("[5] 徒歩時間を加算しました。")
+        df_route = pd.read_csv(route_csv)
+        df_route = add_walking_time(
+            df_route, WALK_MINUTES, to_col='to', time_col='min', new_col='train+walk_min')
+        df_route.to_csv(route_csv, index=False)
+        print("[5] 徒歩時間を加算しました。")
 
-    # 6. フィルタリング（例えば "所要時間 <= 60分" など）
-    filtered_csv = os.path.join(data_dir, "output", "filtered.csv")
-    filter_station_data(route_csv, time_threshold=60, price_threshold=30, output_csv=filtered_csv)
+    # # 6. フィルタリング（例えば "所要時間 <= 60分" など）
+    # filtered_csv = os.path.join(data_dir, "output", "filtered.csv")
+    # filter_station_data(route_csv, time_threshold=60, price_threshold=30, output_csv=filtered_csv)
 
-    # 7. 絞り込み結果をさらに解析してファイルを分割保存
-    evaluate_and_split(filtered_csv, os.path.join(data_dir, "output"))
+    # # 7. 絞り込み結果をさらに解析してファイルを分割保存
+    # evaluate_and_split(filtered_csv, os.path.join(data_dir, "output"))
+
+    merged_csv_path = os.path.join(
+        data_dir, "output", "merged", f"mergend_info_{ROOM_TYPE}.csv")
+    merged_csv = pd.DataFrame()
+
+    for to_station in WALK_MINUTES.keys():
+        route_csv = os.path.join(
+            data_dir, "output", "route_info", f"route_info_{to_station}.csv")
+        df_route = pd.read_csv(route_csv)
+        merged_csv = pd.concat([merged_csv, df_route], axis=0)
+
+    merged_csv.to_csv(merged_csv_path, index=False)
+    print("[6] 結合しました。")
 
     # 8. Google Maps Geocodingで各駅に緯度経度を付与
-    merged_with_geo_csv = os.path.join(data_dir, "output", "merged_with_coordinates.csv")
-    if not os.path.exists(merged_with_geo_csv):
-        _append_geocode(filtered_csv, merged_with_geo_csv)
-    else:
-        print("[8] merged_with_coordinates.csv が既に存在:", merged_with_geo_csv)
+    merged_with_geo_csv = os.path.join(
+        data_dir, "output", "merged", "merged_with_coordinates.csv")
+    _append_geocode(merged_csv_path, merged_with_geo_csv)
 
-    # 9. 可視化
-    figure_path = os.path.join(data_dir, "output", "figure.png")
-    plot_scatter(file_path=merged_with_geo_csv,
-                 lat_col='lat',
-                 lng_col='lng',
-                 color_col='price',
-                 lat_min=35.5,
-                 lat_max=35.9,
-                 lng_min=139.4,
-                 lng_max=140.0,
-                 cmap_min=0,
-                 cmap_max=40,
-                 marker_size=80,
-                 alpha=0.7,
-                 resolution=(1920, 1080),
-                 output_file=figure_path)
+    # # 9. 可視化
+    # figure_path = os.path.join(data_dir, "output", "figure.png")
+    # plot_scatter(file_path=merged_with_geo_csv,
+    #              lat_col='lat',
+    #              lng_col='lng',
+    #              color_col='price',
+    #              lat_min=35.5,
+    #              lat_max=35.9,
+    #              lng_min=139.4,
+    #              lng_max=140.0,
+    #              cmap_min=0,
+    #              cmap_max=40,
+    #              marker_size=80,
+    #              alpha=0.7,
+    #              resolution=(1920, 1080),
+    #              output_file=figure_path)
 
-    print("すべての処理が完了しました。")
+    # print("すべての処理が完了しました。")
 
 
 def _calculate_min_route(station_csv: str, to_station: str, output_csv: str) -> None:
@@ -109,14 +120,16 @@ def _calculate_min_route(station_csv: str, to_station: str, output_csv: str) -> 
         if pd.isna(price):
             continue
         # Ekispert呼び出し
-        route_info = get_minimum_route_info_between_stations(from_station, to_station)
+        route_info = get_minimum_route_info_between_stations(
+            from_station, to_station)
         if route_info is None:
             continue
         trans, minutes = route_info
         print([line, price, from_station, to_station, trans, minutes])
         records.append([line, price, from_station, to_station, trans, minutes])
 
-    out_df = pd.DataFrame(records, columns=['line', 'price', 'from', 'to', 'trans', 'min'])
+    out_df = pd.DataFrame(
+        records, columns=['line', 'price', 'from', 'to', 'trans', 'min'])
     out_df.to_csv(output_csv, index=False)
     print(f"最短ルート情報を保存: {output_csv}")
 

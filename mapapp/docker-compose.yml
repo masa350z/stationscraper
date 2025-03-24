@@ -1,0 +1,29 @@
+version: '3.8'
+services:
+  db:
+    image: postgres:15
+    container_name: mapapp_db
+    restart: always
+    environment:
+      POSTGRES_USER: stationuser
+      POSTGRES_PASSWORD: stationpass
+      POSTGRES_DB: stationdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+  app:
+    build: .
+    container_name: mapapp_app
+    restart: always
+    depends_on:
+      - db
+    ports:
+      - "5000:5000"
+    volumes:
+      - .:/app
+    command: bash -c "python init_db.py && python server.py"
+
+volumes:
+  db_data:
