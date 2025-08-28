@@ -1,16 +1,16 @@
 import pandas as pd
 import os
 
-from src.scrapers.traveltowns_scraper import scrape_traveltowns_kanto
-from src.scrapers.suumo_scraper import scrape_suumo_rent
+from scrapers.traveltowns_scraper import scrape_traveltowns_kanto
+from scrapers.suumo_scraper import scrape_suumo_rent
 
-from src.apis.ekispert import get_minimum_route_info_between_stations
-from src.apis.google_maps import geocode_location
+from apis.ekispert import get_minimum_route_info_between_stations
+from apis.google_maps import geocode_location
 
-from src.pipeline.data_cleaning import merge_station_info, add_walking_time
+from pipeline.data_cleaning import merge_station_info, add_walking_time
 
-from src.config import WALK_MINUTES
-from src.config import ROOM_TYPE
+from config import WALK_MINUTES
+from config import ROOM_TYPE
 
 
 def main():
@@ -19,7 +19,7 @@ def main():
     """
 
     # 1. スクレイピング（Traveltowns）
-    data_dir = "data"
+    data_dir = "../data"
     station_address_csv = os.path.join(data_dir, "station_address.csv")
     if not os.path.exists(station_address_csv):
         print("[1] Traveltownsから駅マスタを取得...")
@@ -138,7 +138,7 @@ def _append_geocode(input_csv: str, output_csv: str) -> None:
     """
     フィルタ済のCSVに緯度経度情報を付与して書き出す。
     """
-    from src.apis.google_maps import geocode_location
+    from apis.google_maps import geocode_location
 
     df = pd.read_csv(input_csv)
     lat_list = []

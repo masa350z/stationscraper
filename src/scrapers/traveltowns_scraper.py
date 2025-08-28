@@ -4,7 +4,7 @@ import pandas as pd
 import time
 
 from tqdm import tqdm
-from src.config import SCRAPING_SLEEP_SEC, SCRAPING_RETRY_COUNT
+from config import SCRAPING_SLEEP_SEC, SCRAPING_RETRY_COUNT
 
 
 def scrape_traveltowns_kanto(output_csv_path: str) -> None:

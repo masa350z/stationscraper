@@ -4,7 +4,7 @@ import pandas as pd
 import time
 
 from tqdm import tqdm
-from src.config import SCRAPING_SLEEP_SEC, SCRAPING_RETRY_COUNT
+from config import SCRAPING_SLEEP_SEC, SCRAPING_RETRY_COUNT
 
 
 def scrape_suumo_rent(pref_list, output_csv_path, room_type='one_room'):

@@ -2,7 +2,7 @@ import requests
 from bs4 import BeautifulSoup
 import numpy as np
 
-from src.config import EKISPERT_KEY
+from config import EKISPERT_KEY
 
 
 def get_official_station_name(station_name: str) -> str or None:

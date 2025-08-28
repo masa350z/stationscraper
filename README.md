@@ -39,29 +39,52 @@
 
 ```
 stationscraper
-├── .env                  # APIキーなどを管理する環境変数ファイル(手動で作成)
-├── .gitignore            # Git向けの無視リスト
-├── data
+├── .env                     # APIキーなどを管理する環境変数ファイル(手動で作成)
+├── .gitignore              # Git向けの無視リスト
+├── data/
 │   ├── line_url.csv
-│   ├── output
-│   │   ├── route_info_乃木坂.csv
-│   │   ├── route_info_六本木.csv
-│   │   ├── ... (省略)
-│   │   └── temp
-├── requirements.txt      # 必要なPythonパッケージ
-└── src
-    ├── apis
-    │   ├── analysis.py
+│   ├── station_address.csv # 駅マスタ情報
+│   ├── station_price/      # 家賃相場データ
+│   │   ├── station_price_1k.csv
+│   │   ├── station_price_2k.csv
+│   │   └── station_price_one_room.csv
+│   └── output/
+│       ├── merged/         # マージされたデータ
+│       │   ├── merged_with_coordinates.csv
+│       │   └── mergend_info_one_room.csv
+│       ├── price_info/     # 価格情報
+│       │   ├── price_by_station_1k.csv
+│       │   ├── price_by_station_2k.csv
+│       │   └── price_by_station_one_room.csv
+│       └── route_info/     # 路線情報
+│           ├── route_info_内幸町.csv
+│           ├── route_info_国会議事堂前.csv
+│           ├── route_info_大塚.csv
+│           └── ... (その他の駅)
+├── mapapp/                 # Webアプリケーション
+│   ├── Dockerfile
+│   ├── docker-compose.yml
+│   ├── init_db.py
+│   ├── requirements.txt
+│   ├── server.py
+│   ├── static/
+│   │   ├── index.html
+│   │   └── main.js
+│   └── stations.csv
+├── requirements.txt        # 必要なPythonパッケージ
+└── src/
+    ├── apis/
+    │   ├── analysis.py     # 空ファイル（未実装）
     │   ├── ekispert.py
     │   ├── google_maps.py
-    │   └── visualization.py
+    │   └── visualization.py # 空ファイル（未実装）
     ├── config.py
-    ├── main.py           # メイン処理エントリーポイント
-    ├── pipeline
+    ├── main.py             # メイン処理エントリーポイント
+    ├── pipeline/
     │   ├── analysis.py
     │   ├── data_cleaning.py
     │   └── visualization.py
-    └── scrapers
+    └── scrapers/
         ├── suumo_scraper.py
         └── traveltowns_scraper.py
 ```
@@ -78,7 +101,8 @@ stationscraper
 ### `src/apis/`
 - `ekispert.py`: Ekispert API で正式駅名や所要時間を取得
 - `google_maps.py`: Google Maps Geocoding API で各駅の緯度経度を取得
-- `analysis.py`, `visualization.py`: API連携や簡易解析（未実装 or サンプル）
+- `analysis.py`: 空ファイル（未実装）
+- `visualization.py`: 空ファイル（未実装）
 
 ### `src/pipeline/`
 - `data_cleaning.py`: 駅マスタと家賃を結合、時間・家賃フィルタや徒歩時間加算などの処理
@@ -87,6 +111,7 @@ stationscraper
 
 ### `src/config.py`
 - 環境変数のロードやプロジェクトで利用する各種定数（APIキー、閾値など）を設定
+- **注意**: `MAX_TRANS_DEFAULT`, `MAX_TIME_DEFAULT`, `MAX_PRICE_DEFAULT` が未定義のため、`src/pipeline/analysis.py` でエラーが発生する可能性があります
 
 ## セットアップ
 
@@ -108,6 +133,11 @@ source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
+**注意**: `requirements.txt` に `python-dotenv` が含まれていないため、手動でインストールが必要です。
+```bash
+pip install python-dotenv
+```
+
 ### APIキーの設定 (.env ファイル作成)
 `.env` ファイルに以下のように記載します。
 ```dotenv
@@ -118,6 +148,7 @@ GOOGLE_MAPS_KEY=YOUR_GOOGLE_MAPS_API_KEY
 ### データディレクトリの確認
 - プロジェクト直下に `data` ディレクトリが必要です。
 - スクレイピング結果や処理済みCSVは `data/output` 以下に保存されます。
+- 初回実行時に必要なサブディレクトリは自動的に作成されます。
 
 ## 使い方
 
@@ -134,9 +165,18 @@ python src/main.py
 - `src/config.py` の `MAX_TIME_DEFAULT` や `ROOM_TYPE` などを変更可能
 - `WALK_MINUTES` を調整して目的地の駅数や徒歩時間を設定
 
+### Webアプリケーションの実行
+`mapapp` ディレクトリには、取得したデータを地図上で可視化するWebアプリケーションが含まれています。
+
+```bash
+cd mapapp
+docker-compose up
+```
+
 ### 拡張
 - `pipeline` 以下のスクリプトを修正し、家賃以外に「築年数」や「部屋サイズ」などを追加分析可能
 - `apis/visualization.py` と連携し、Folium などの地図表示ツールとの組み合わせも検討可能
+- `mapapp` のWebアプリケーションを拡張してより詳細な分析機能を追加可能
 
 ## 注意事項
 

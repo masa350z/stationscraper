@@ -1,5 +1,5 @@
 import pandas as pd
-from src.config import MAX_TRANS_DEFAULT, MAX_TIME_DEFAULT, MAX_PRICE_DEFAULT
+from config import MAX_TRANS_DEFAULT, MAX_TIME_DEFAULT, MAX_PRICE_DEFAULT
 
 def evaluate_and_split(input_csv: str, output_dir: str) -> None:
     """

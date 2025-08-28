@@ -1,5 +1,5 @@
 import requests
-from src.config import GOOGLE_MAPS_KEY
+from config import GOOGLE_MAPS_KEY
 
 
 def geocode_location(location_name: str) -> tuple:
