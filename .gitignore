@@ -3,3 +3,7 @@ __pycache__/
 *.pyc
 .DS_Store
 venv
+nominatim/nominatim-pgdata/*
+nominatim/osrm-data/*
+nominatim/nominatim-pgdata/*
+nominatim/japan-latest.osm.pbf

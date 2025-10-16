@@ -4,13 +4,36 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Development Philosophy
 
-This is a development/prototype project where **simplicity, maintainability, and readability are the highest priorities**. Follow the YAGNI (You Aren't Gonna Need It) principle:
+This is a **personal hobby development project** where **simplicity, maintainability, and readability are the highest priorities**. This is NOT a production system - focus on learning and experimentation.
 
-- Keep code simple and straightforward
-- Avoid unnecessary features or complex abstractions
-- Don't implement sophisticated error handling unless specifically needed
-- Prioritize clarity over performance optimizations
+### Core Principles: YAGNI + KISS
+
+**YAGNI (You Aren't Gonna Need It)**
+- Don't add features until you actually need them
+- Avoid over-engineering or "future-proofing" 
+- Build the simplest thing that works first
+- Add complexity only when requirements demand it
+
+**KISS (Keep It Simple, Stupid)**
+- Prefer simple, obvious solutions over clever ones
 - Use basic, well-understood patterns and libraries
+- Avoid unnecessary abstractions or frameworks
+- Choose readability over performance unless performance is actually a problem
+
+### What NOT to implement (unless specifically needed)
+- Sophisticated error handling or retry logic
+- Complex logging systems or monitoring
+- Advanced security measures or input validation
+- Performance optimizations or caching
+- Enterprise-grade database schemas
+- Microservices architecture or event systems
+
+### Code Quality Standards
+- **Clear responsibility separation**: Each module should have one clear purpose
+- **Readable code**: Self-documenting variable/function names
+- **Minimal dependencies**: Use standard library when possible  
+- **Simple data flow**: Input → Process → Output, avoid complex state management
+- **No dead code**: Remove unused files, functions, or features immediately
 
 **コードの説明やコメントは日本語で記述してください。**
 
