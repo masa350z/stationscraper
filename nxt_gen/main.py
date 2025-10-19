@@ -7,7 +7,7 @@ import os
 import sys
 import pandas as pd
 from config import TARGET_STATIONS, FINAL_CSV_NAME, MAX_PRICE_DEFAULT, MAX_TIME_DEFAULT, MAX_TRANS_DEFAULT, API_BATCH_SIZE, SAVE_INTERVAL
-from data_loader import load_station_master, load_price_data, load_existing_route_data, save_data, save_route_data_to_legacy_format, save_intermediate_route_data, load_fallback_route_data
+from data_loader import load_station_master, load_price_data, load_existing_route_data, save_data, save_route_data_to_legacy_format, save_intermediate_route_data
 from route_collector import collect_route_info
 from data_processor import prepare_final_dataset, filter_stations, merge_station_and_price
 
@@ -51,60 +51,13 @@ def process_route_data(df_station, df_price, target_station, walk_minutes):
     if missing_stations:
         print(f"  追加収集が必要: {len(missing_stations)}駅")
 
-        # フォールバックデータを読み込み
-        print("  フォールバックデータ（六本木への経路）を使用します")
-        fallback_data = load_fallback_route_data()
-
         # 不足分の駅データを準備
         df_to_collect = df_merged[
             df_merged[['line', 'station']].apply(tuple, axis=1).isin(missing_stations)
         ]
 
-        # フォールバックデータから経路情報を作成
-        records = []
-        filled_count = 0
-        not_found_count = 0
-
-        for _, row in df_to_collect.iterrows():
-            station = row['station']
-            line = row['line']
-            price = row.get('price', None)  # 元データから家賃情報を取得
-
-            # フォールバックデータから取得
-            if station in fallback_data:
-                estimated_min, fallback_price = fallback_data[station]
-                # 元データに家賃がない場合はフォールバックデータから使用
-                if price is None or pd.isna(price):
-                    price = fallback_price
-
-                # 乗換回数は推定（15分未満:0回, 15-30分:1回, それ以上:2回）
-                if estimated_min < 15:
-                    trans = 0
-                elif estimated_min < 30:
-                    trans = 1
-                else:
-                    trans = 2
-
-                record = {
-                    'line': line,
-                    'station': station,
-                    'price': price,  # 家賃情報を追加
-                    'to_station': target_station,
-                    'trans': trans,
-                    'train_min': estimated_min,
-                    'walk_min': walk_minutes,
-                    'total_min': estimated_min + walk_minutes
-                }
-                records.append(record)
-                filled_count += 1
-            else:
-                not_found_count += 1
-
-        print(f"  フォールバックデータで補完: {filled_count}駅")
-        if not_found_count > 0:
-            print(f"  データなし: {not_found_count}駅")
-
-        df_route_new = pd.DataFrame(records)
+        # route_collectorを使って実際にAPI呼び出し
+        df_route_new = collect_route_info(df_to_collect, target_station, walk_minutes)
 
         # 既存データと統合
         if df_route_existing is not None:

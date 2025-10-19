@@ -97,13 +97,7 @@ graph TB
         POSTGRES[(PostgreSQL<br/>駅データベース)]
         FRONT[Leaflet.js<br/>地図UI]
     end
-    
-    subgraph "地理空間サービス (nominatim/)"
-        NOM[Nominatim<br/>地名検索API]
-        OSRM[OSRM<br/>ルーティングAPI]
-        OSM[(OpenStreetMap<br/>地図データ)]
-    end
-    
+
     %% データフロー
     TT -->|スクレイピング| SCR
     SUUMO -->|スクレイピング| SCR
@@ -225,7 +219,6 @@ stationscraper
 ├── .env                     # APIキーなどを管理する環境変数ファイル(手動で作成)
 ├── .gitignore              # Git向けの無視リスト
 ├── data/
-│   ├── line_url.csv
 │   ├── station_address.csv # 駅マスタ情報
 │   ├── station_price/      # 家賃相場データ
 │   │   ├── station_price_1k.csv
@@ -254,13 +247,6 @@ stationscraper
 │   │   ├── index.html
 │   │   └── main.js
 │   └── stations.csv
-├── nominatim/              # 地理空間サービス
-│   ├── README.md
-│   ├── docker-compose.yml
-│   ├── japan-latest.osm.pbf
-│   ├── nominatim-pgdata/   # Nominatim PostgreSQLデータ
-│   ├── osrm-data/          # OSRM前処理済みデータ
-│   └── osrm-profile/       # OSRMプロファイル設定
 ├── requirements.txt        # 必要なPythonパッケージ
 └── src/
     ├── apis/
@@ -401,41 +387,6 @@ docker-compose up
 1. **初期化時**: `init_db.py` が `stations.csv` を読み込み、PostgreSQL に駅データを投入
 2. **API呼び出し**: フロントエンドからのフィルタ条件に基づいて SQL クエリを実行
 3. **地図更新**: 取得した駅データを Leaflet.js でマーカー表示・更新
-
-### 地理空間サービス (Nominatim)
-
-`nominatim` ディレクトリには、OpenStreetMapデータを使用した地名検索とルーティング機能が含まれています。
-
-#### サービス構成
-
-1. **Nominatim（地名検索API）**
-   - ポート: `localhost:8081`
-   - 機能: 日本の地名・住所検索、逆ジオコーディング
-   - 用途: 駅名から正確な座標取得
-
-2. **OSRM（ルーティングAPI）**
-   - ポート: `localhost:5001`
-   - 機能: 日本国内のルート計算、距離・時間算出
-   - 用途: 駅間の実際のルート距離計算
-
-#### 実行方法
-
-```bash
-cd nominatim
-docker-compose up -d
-```
-
-#### API使用例
-
-```bash
-# 地名検索
-curl "http://localhost:8081/search?q=東京駅&format=json&limit=1"
-
-# ルート計算（東京駅→新宿駅）
-curl "http://localhost:5001/route/v1/driving/139.7671,35.6812;139.7006,35.6896?overview=full"
-```
-
-**注意**: 初回起動時はデータ前処理に数十分～数時間かかります。
 
 ### 拡張
 - `pipeline` 以下のスクリプトを修正し、家賃以外に「築年数」や「部屋サイズ」などを追加分析可能

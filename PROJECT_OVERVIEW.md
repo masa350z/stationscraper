@@ -81,15 +81,6 @@ graph TB
         MAP_DB --> MAP_FRONT
     end
 
-    subgraph "地理空間サービス (nominatim/)"
-        NOM_SERVICE[Nominatim<br/>地名検索API<br/>Port: 8081]
-        OSRM_SERVICE[OSRM<br/>ルーティングAPI<br/>Port: 5001]
-        OSM_DATA[OpenStreetMap<br/>日本地図データ]
-
-        OSM_DATA --> NOM_SERVICE
-        OSM_DATA --> OSRM_SERVICE
-    end
-
     %% スタイル
     style SRC fill:#ffcdd2
     style NXT fill:#c5e1a5
@@ -97,8 +88,6 @@ graph TB
     style GEOCODE fill:#fff59d
     style FALLBACK1 fill:#ffccbc
     style FALLBACK2 fill:#ffccbc
-    style NOM_SERVICE fill:#b2dfdb
-    style OSRM_SERVICE fill:#b2dfdb
 ```
 
 ---
@@ -121,14 +110,21 @@ flowchart TD
     SCRAPE1 --> SAVE1[station_address.csv]
     SKIP1 --> SAVE1
 
-    SAVE1 --> CHECK2{家賃CSV<br/>存在?}
+    SAVE1 --> CHECK_COORDS{座標付き<br/>駅マスタ<br/>存在?}
+    CHECK_COORDS -->|あり| LOAD_COORDS[既存データ読込<br/>欠損駅のみ取得]
+    CHECK_COORDS -->|なし| NEW_COORDS[全駅の座標を取得]
+    LOAD_COORDS --> GEOCODE[Google Maps API<br/>座標取得]
+    NEW_COORDS --> GEOCODE
+    GEOCODE --> SAVE1B[station_address_with_coordinates.csv]
+
+    SAVE1B --> CHECK2{家賃CSV<br/>存在?}
     CHECK2 -->|なし| SCRAPE2[SUUMO<br/>スクレイピング]
     CHECK2 -->|あり| SKIP2[既存使用]
     SCRAPE2 --> SAVE2[station_price_one_room.csv]
     SKIP2 --> SAVE2
 
-    SAVE2 --> MERGE1[駅マスタ+家賃<br/>マージ]
-    MERGE1 --> SAVE3[price_by_station_one_room.csv]
+    SAVE2 --> MERGE1[座標付き駅マスタ+家賃<br/>マージ]
+    MERGE1 --> SAVE3[price_by_station_one_room.csv<br/>※座標情報も含む]
 
     SAVE3 --> LOOP[目的地ごとに処理<br/>8駅分]
     LOOP --> CHECK3{経路CSV<br/>存在?}
@@ -143,20 +139,19 @@ flowchart TD
     CHECK_MORE -->|なし| CONCAT[全データ結合]
 
     CONCAT --> SAVE5[merged_info_one_room.csv]
-    SAVE5 --> GEOCODE_COMMENT[※ジオコーディングは<br/>コメントアウト済み]
 
     style START fill:#e1f5fe
     style SCRAPE1 fill:#fff3e0
     style SCRAPE2 fill:#fff3e0
     style API1 fill:#fff3e0
-    style GEOCODE_COMMENT fill:#ffebee
+    style GEOCODE fill:#e1bee7
 ```
 
 #### 主要ファイル
 
 | ファイル | 役割 | 状態 |
 |---------|------|------|
-| `src/main.py` | メイン処理（Jupyterノートブック的構造） | ✅ 動作 |
+| `src/main.py` | メインパイプライン（関数化済み）<br/>- `geocode_station_with_retry()`: 複数パターンで座標取得<br/>- `add_geocode_to_station_master()`: 駅マスタに座標付与<br/>- `make_*()`: パイプライン各ステップの関数群 | ✅ 動作 |
 | `src/config.py` | 設定ファイル（API KEY、目的地など） | ⚠️ 一部定数未定義 |
 | `src/scrapers/traveltowns_scraper.py` | TravelTownsスクレイピング | ✅ 動作 |
 | `src/scrapers/suumo_scraper.py` | SUUMOスクレイピング | ✅ 動作 |
@@ -172,7 +167,6 @@ flowchart TD
 
 ```
 data/
-├── line_url.csv                                 # 路線URL（中間データ）
 ├── station_address.csv                          # 駅マスタ（2,496駅）
 ├── station_address_with_coordinates.csv         # 座標付き駅マスタ（2,070駅）
 ├── station_price/
@@ -195,15 +189,7 @@ data/
 
 #### CSVファイル構造詳細
 
-##### 1. line_url.csv
-TravelTownsの路線ページURLと路線名の対応表（中間データ）
-
-| カラム名 | データ型 | 説明 |
-|---------|---------|------|
-| `url` | TEXT | TravelTownsの路線ページURL |
-| `line` | TEXT | 路線名 |
-
-##### 2. station_address.csv
+##### 1. station_address.csv
 関東の全鉄道路線の駅名リスト（2,496駅）
 
 | カラム名 | データ型 | 説明 |
@@ -213,7 +199,7 @@ TravelTownsの路線ページURLと路線名の対応表（中間データ）
 
 **生成**: `src/scrapers/traveltowns_scraper.py:scrape_traveltowns_kanto()`
 
-##### 3. station_address_with_coordinates.csv
+##### 2. station_address_with_coordinates.csv
 駅マスタに緯度経度を追加したデータ（2,070駅に座標あり）
 
 | カラム名 | データ型 | 説明 |
@@ -223,9 +209,14 @@ TravelTownsの路線ページURLと路線名の対応表（中間データ）
 | `lat` | FLOAT | 緯度 |
 | `lng` | FLOAT | 経度 |
 
-**生成**: `src/main.py` (Google Maps API経由、現在はコメントアウト済み)
+**生成**: `src/main.py:add_geocode_to_station_master()` (Google Maps API経由、既存データ活用)
 
-##### 4. station_price_one_room.csv
+**特徴**:
+- 既存の座標データがある場合は読み込んで活用（API使用量を節約）
+- 座標がない駅のみ新規取得
+- 複数のクエリパターン（路線名+駅名、駅名のみなど）で取得を試行
+
+##### 3. station_price_one_room.csv
 SUUMOからスクレイピングした駅ごとのワンルーム家賃相場（2,167駅）
 
 | カラム名 | データ型 | 説明 |
@@ -238,7 +229,7 @@ SUUMOからスクレイピングした駅ごとのワンルーム家賃相場（
 
 **注意**: 路線名の表記が駅マスタと異なる（全角JR vs 半角JR等）
 
-##### 5. price_by_station_one_room.csv
+##### 4. price_by_station_one_room.csv
 駅マスタと家賃データをマージしたデータ（1,108駅のみマージ成功、44%）
 
 | カラム名 | データ型 | 説明 |
@@ -251,7 +242,7 @@ SUUMOからスクレイピングした駅ごとのワンルーム家賃相場（
 
 **問題**: 路線名の表記揺れにより56%の駅が欠損
 
-##### 6. route_info_*.csv
+##### 5. route_info_*.csv
 各駅から目的地への経路情報（8つの目的地ごとに生成）
 
 | カラム名 | データ型 | 説明 |
@@ -268,7 +259,7 @@ SUUMOからスクレイピングした駅ごとのワンルーム家賃相場（
 
 **目的地**: 虎ノ門ヒルズ、虎ノ門、新橋、霞ケ関、国会議事堂前、溜池山王、桜田門、内幸町
 
-##### 7. merged_info_one_room.csv
+##### 6. merged_info_one_room.csv
 全目的地の経路情報を統合したデータ
 
 | カラム名 | データ型 | 説明 |
@@ -284,10 +275,12 @@ SUUMOからスクレイピングした駅ごとのワンルーム家賃相場（
 **生成**: `src/main.py` (全route_info_*.csvを結合)
 
 #### 問題点
-- ✗ Jupyterノートブック的な構造で保守性が低い
 - ✗ 空ファイル（analysis.py、visualization.py）が残存
-- ✗ ジオコーディング処理がコメントアウトされている
 - ✗ 路線名の表記揺れで44%の駅しかマージできていない（[FIX_LINE_NAME_MAPPING.md](./FIX_LINE_NAME_MAPPING.md) 参照）
+
+#### 改善済み
+- ✓ Jupyterノートブック的構造を整理し、メインパイプラインを関数化（2025年10月19日）
+- ✓ ジオコーディング処理をパイプラインに統合、既存データ活用により効率化（2025年10月19日）
 
 ---
 
@@ -532,39 +525,7 @@ http://localhost:5000 でアクセス
 
 ---
 
-### 4. **nominatim/** - 地理空間サービス
-
-#### 役割
-OpenStreetMapデータを使用した**地名検索とルーティング機能**を提供。
-
-#### サービス構成
-
-| サービス | ポート | 機能 |
-|---------|--------|------|
-| Nominatim | 8081 | 地名検索、逆ジオコーディング |
-| OSRM | 5001 | ルート計算、距離・時間算出 |
-
-#### 使用例
-
-```bash
-# 地名検索
-curl "http://localhost:8081/search?q=東京駅&format=json&limit=1"
-
-# ルート計算（東京駅→新宿駅）
-curl "http://localhost:5001/route/v1/driving/139.7671,35.6812;139.7006,35.6896?overview=full"
-```
-
-#### データソース
-- `japan-latest.osm.pbf`: 日本の地図データ
-- 初回起動時に前処理が必要（数十分～数時間）
-
-#### 問題点
-- ✗ プロジェクト内でほとんど使われていない
-- ✗ 代わりにGoogle Maps APIを使用している
-
----
-
-### 5. 補完スクリプト・データファイル
+### 4. 補完スクリプト・データファイル
 
 #### geocode_missing_stations.py
 
@@ -761,7 +722,6 @@ stationscraper/
 ├── all_price_code.csv                      # 六本木周辺の家賃（1,615駅）
 │
 ├── data/                                   # データストレージ
-│   ├── line_url.csv
 │   ├── station_address.csv                 # 駅マスタ（2,496駅）
 │   ├── station_address_with_coordinates.csv # 座標付き駅マスタ（2,070駅）
 │   ├── missing_coords_geocoded.csv         # 座標補完結果
@@ -828,13 +788,6 @@ stationscraper/
 │   │   ├── index.html                      # フロントエンド
 │   │   └── main.js
 │   └── stations.csv                        # 駅データ（要手動配置）
-│
-└── nominatim/                              # 地理空間サービス（ほぼ未使用）
-    ├── README.md
-    ├── docker-compose.yml
-    ├── japan-latest.osm.pbf/               # 日本地図データ
-    ├── osrm-data/                          # OSRMデータ
-    └── osrm-profile/                       # OSRMプロファイル
 ```
 
 ---
@@ -890,17 +843,6 @@ docker-compose up
 # http://localhost:5000
 ```
 
-### 地理空間サービス（nominatim/）
-
-```bash
-cd nominatim
-docker-compose up -d
-
-# 初回起動は前処理に数十分～数時間かかる
-# http://localhost:8081 (Nominatim)
-# http://localhost:5001 (OSRM)
-```
-
 ---
 
 ## 問題点と改善提案
@@ -945,9 +887,10 @@ docker-compose up -d
    - src/config.pyに不足している定数を追加
    - requirements.txtにpython-dotenvを追加
 
-3. **データパイプラインの整備**
-   - 実行順序を明確にするREADMEの更新
-   - 各ステップの必須/オプションを明記
+3. ~~**データパイプラインの整備**~~ ✅ **完了（2025年10月19日）**
+   - ✓ 実行順序が関数名から明確になった
+   - ✓ 各ステップが独立した関数として明示的に定義された
+   - ✓ 未使用のテストファイル（temp*.py）を削除
 
 #### 中期的改善
 
@@ -990,7 +933,6 @@ docker-compose up -d
 | **src/** | 1次データ収集 | ✓ 独立 | ⭐⭐⭐ 必須 |
 | **nxt_gen/** | 2次データ加工 | ✗ src/に依存 | ⭐⭐ 便利 |
 | **mapapp/** | Docker版Web可視化 | ✗ src/に依存 | ⭐⭐ 便利 |
-| **nominatim/** | 地理空間サービス | ✓ 独立 | ⭐ ほぼ未使用 |
 
 ### 推奨される使い方
 
@@ -1033,7 +975,25 @@ docker-compose up
 - [README.md](./README.md) - プロジェクト概要（Mermaid図含む）
 - [FIX_LINE_NAME_MAPPING.md](./FIX_LINE_NAME_MAPPING.md) - 路線名マッピング問題の解決ガイド
 - [nxt_gen/README.md](./nxt_gen/README.md) - nxt_gen説明
-- [nominatim/README.md](./nominatim/README.md) - Nominatim説明
+
+---
+
+## 変更履歴
+
+### 2025年10月19日（リファクタリング第2弾）
+- **座標付き駅マスタの早期生成**: パイプラインで `station_address.csv` 作成後すぐに座標情報を付与する仕組みを実装
+- **geocode_station_with_retry() 関数追加**: `geocode_missing_stations.py` のロジックを汎用化して `main.py` に統合
+  - 複数のクエリパターン（路線名+駅名、駅名のみなど）で座標取得を試行し成功率を向上
+- **add_geocode_to_station_master() 関数追加**: 既存座標データを活用し、欠損駅のみ新規取得する効率的な実装
+  - API使用量を節約（既存データがある場合は欠損駅のみ取得）
+  - 進捗表示とレート制限対応を実装
+- **ジオコーディング処理の統合**: コメントアウトされていた座標取得処理をパイプラインに正式統合
+- **不要コードの削除**: 末尾のデバッグ用コードとコメントアウトされたコードを削除
+
+### 2025年10月19日（リファクタリング第1弾）
+- **nominatim削除**: 未使用のnominatimディレクトリとドキュメント記載を削除（Google Maps API使用のため不要）
+- **line_url.csv削除**: 過去の実装で使われていた中間ファイルを削除（現在は`scrape_traveltowns_kanto()`関数に統合済み）
+- **src/main.pyリファクタリング**: メインパイプラインを5つのヘルパー関数（`make_*()`）に分割し可読性を向上
 
 ---
 
