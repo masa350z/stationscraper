@@ -3,7 +3,7 @@
 """
 import pandas as pd
 import os
-from config import STATION_MASTER_PATH, PRICE_DATA_PATH
+from config import STATION_MASTER_PATH, PRICE_ORIGINAL_PATH
 from line_mapping import normalize_line_name
 
 def load_station_master():
@@ -29,21 +29,40 @@ def load_station_master():
 
 def load_price_data():
     """
-    家賃情報を読み込む
+    家賃情報を読み込み、駅マスタと統合して座標付き家賃データを生成する
+
+    このバージョンでは、src/のmake_merged_data()と同等の処理を実行し、
+    price_by_station_*.csvという中間ファイルを廃止している。
 
     Returns:
     --------
-    pandas.DataFrame : 家賃データ (line, station, price)
+    pandas.DataFrame : 座標付き家賃データ (line, station, lat, lng, price)
     """
-    df = pd.read_csv(PRICE_DATA_PATH)
+    # 座標付き駅マスタを読み込む
+    df_station = pd.read_csv(STATION_MASTER_PATH)
+
+    # 家賃データを読み込む
+    df_price = pd.read_csv(PRICE_ORIGINAL_PATH)
+
+    # src/pipeline/data_cleaning.pyの正規化ロジックをインポート
+    import sys
+    sys.path.insert(0, '../src')
+    from pipeline.data_cleaning import normalize_line_names
+
+    # 路線名を正規化
+    df_price_normalized = normalize_line_names(df_price, df_station)
+
+    # マージ
+    merged = pd.merge(df_station, df_price_normalized, on=['line', 'station'], how='left')
+    merged.drop_duplicates(inplace=True)
 
     # 家賃情報がある駅のみフィルタ
-    df_with_price = df[df['price'].notna()].copy()
+    df_with_price = merged[merged['price'].notna()].copy()
 
     print(f"家賃データ読み込み完了:")
-    print(f"  全データ: {len(df)}件")
-    print(f"  家賃あり: {len(df_with_price)}件")
-    print(f"  家賃なし（除外）: {len(df) - len(df_with_price)}件")
+    print(f"  全駅数: {len(merged)}駅")
+    print(f"  家賃あり: {len(df_with_price)}駅 ({len(df_with_price)/len(merged)*100:.1f}%)")
+    print(f"  家賃なし（除外）: {len(merged) - len(df_with_price)}駅")
 
     return df_with_price
 

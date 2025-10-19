@@ -10,8 +10,8 @@ load_dotenv()
 EKISPERT_KEY = os.environ.get("EKISPERT_KEY")
 
 # 既存データファイルのパス（プロジェクトルートからの相対パス）
-STATION_MASTER_PATH = "../data/station_address_with_coordinates.csv"
-PRICE_DATA_PATH = "../data/output/price_info/price_by_station_one_room.csv"
+STATION_MASTER_PATH = "../data/station_master/station_address_with_coordinates.csv"
+PRICE_ORIGINAL_PATH = "../data/price_by_station/price_by_station_one_room.csv"
 
 # 対象駅と駅からの徒歩時間（分）
 TARGET_STATIONS = {

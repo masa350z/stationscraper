@@ -46,15 +46,6 @@ graph TB
         API2 --> D5
     end
 
-    subgraph "補完スクリプト (root/)"
-        GEOCODE[geocode_missing_stations.py<br/>座標補完スクリプト]
-        FALLBACK1[all_min_code.csv<br/>六本木への所要時間<br/>1603駅]
-        FALLBACK2[all_price_code.csv<br/>六本木周辺の家賃<br/>1615駅]
-
-        D5 --> GEOCODE
-        GEOCODE --> D5
-    end
-
     subgraph "2次データ加工 (nxt_gen/)"
         NXT[nxt_gen/main.py<br/>データ加工パイプライン]
         NXT_NORM[路線名正規化<br/>line_mapping.py]
@@ -64,8 +55,6 @@ graph TB
         D5 --> NXT
         D3 --> NXT
         D4 --> NXT
-        FALLBACK1 -.推定補完.-> NXT
-        FALLBACK2 -.推定補完.-> NXT
         NXT --> NXT_NORM
         NXT --> NXT_OUT
         NXT_OUT --> NXT_WEB
@@ -85,9 +74,6 @@ graph TB
     style SRC fill:#ffcdd2
     style NXT fill:#c5e1a5
     style MAP_WEB fill:#90caf9
-    style GEOCODE fill:#fff59d
-    style FALLBACK1 fill:#ffccbc
-    style FALLBACK2 fill:#ffccbc
 ```
 
 ---
@@ -123,10 +109,9 @@ flowchart TD
     SCRAPE2 --> SAVE2[station_price_one_room.csv]
     SKIP2 --> SAVE2
 
-    SAVE2 --> MERGE1[座標付き駅マスタ+家賃<br/>マージ]
-    MERGE1 --> SAVE3[price_by_station_one_room.csv<br/>※座標情報も含む]
+    SAVE2 --> MERGE1[座標付き駅マスタ+家賃<br/>メモリ内でマージ<br/>※CSV保存なし]
 
-    SAVE3 --> LOOP[目的地ごとに処理<br/>8駅分]
+    MERGE1 --> LOOP[目的地ごとに処理<br/>8駅分]
     LOOP --> CHECK3{経路CSV<br/>存在?}
     CHECK3 -->|なし| API1[Ekispert API<br/>所要時間取得]
     CHECK3 -->|あり| SKIP3[既存使用]
@@ -152,14 +137,13 @@ flowchart TD
 | ファイル | 役割 | 状態 |
 |---------|------|------|
 | `src/main.py` | メインパイプライン（関数化済み）<br/>- `geocode_station_with_retry()`: 複数パターンで座標取得<br/>- `add_geocode_to_station_master()`: 駅マスタに座標付与<br/>- `make_*()`: パイプライン各ステップの関数群 | ✅ 動作 |
+| `src/functions.py` | パイプライン関数群<br/>- `make_merged_data()`: メモリ内でデータマージ（CSV保存なし） | ✅ 動作 |
 | `src/config.py` | 設定ファイル（API KEY、目的地など） | ⚠️ 一部定数未定義 |
 | `src/scrapers/traveltowns_scraper.py` | TravelTownsスクレイピング | ✅ 動作 |
 | `src/scrapers/suumo_scraper.py` | SUUMOスクレイピング | ✅ 動作 |
 | `src/apis/ekispert.py` | Ekispert API呼び出し | ✅ 動作 |
 | `src/apis/google_maps.py` | Google Maps API呼び出し | ✅ 動作 |
-| `src/apis/analysis.py` | 分析機能 | ❌ **空ファイル** |
-| `src/apis/visualization.py` | 可視化機能 | ❌ **空ファイル** |
-| `src/pipeline/data_cleaning.py` | データクリーニング | ✅ 動作 |
+| `src/pipeline/data_cleaning.py` | データクリーニング・路線名正規化 | ✅ 動作 |
 | `src/pipeline/analysis.py` | フィルタリング処理 | ⚠️ config.pyの未定義定数に依存 |
 | `src/pipeline/visualization.py` | 散布図描画 | ✅ 動作 |
 
@@ -167,13 +151,14 @@ flowchart TD
 
 ```
 data/
-├── station_address.csv                          # 駅マスタ（2,496駅）
-├── station_address_with_coordinates.csv         # 座標付き駅マスタ（2,070駅）
-├── station_price/
-│   └── station_price_one_room.csv               # 家賃データ（2,167駅）
+├── station_master/
+│   ├── station_address.csv                      # 駅マスタ（2,496駅）
+│   └── station_address_with_coordinates.csv     # 座標付き駅マスタ（2,496駅、全駅に座標あり）
+├── price_by_station/
+│   ├── price_by_station_one_room.csv            # 家賃データ（2,167駅）
+│   ├── price_by_station_1k.csv                  # 1K家賃データ
+│   └── price_by_station_2k.csv                  # 2K家賃データ
 └── output/
-    ├── price_info/
-    │   └── price_by_station_one_room.csv        # マージ済み（1,108駅）
     ├── route_info/
     │   ├── route_info_虎ノ門ヒルズ.csv
     │   ├── route_info_虎ノ門.csv
@@ -184,7 +169,8 @@ data/
     │   ├── route_info_桜田門.csv
     │   └── route_info_内幸町.csv                # 各目的地への経路情報
     └── merged/
-        └── merged_info_one_room.csv             # 統合データ
+        ├── mergend_info_one_room.csv            # 統合データ（タイポあり）
+        └── merged_with_coordinates.csv          # 座標付き統合データ
 ```
 
 #### CSVファイル構造詳細
@@ -209,6 +195,8 @@ data/
 | `lat` | FLOAT | 緯度 |
 | `lng` | FLOAT | 経度 |
 
+**保存先**: `data/station_master/station_address_with_coordinates.csv`
+
 **生成**: `src/main.py:add_geocode_to_station_master()` (Google Maps API経由、既存データ活用)
 
 **特徴**:
@@ -216,7 +204,7 @@ data/
 - 座標がない駅のみ新規取得
 - 複数のクエリパターン（路線名+駅名、駅名のみなど）で取得を試行
 
-##### 3. station_price_one_room.csv
+##### 3. price_by_station_one_room.csv
 SUUMOからスクレイピングした駅ごとのワンルーム家賃相場（2,167駅）
 
 | カラム名 | データ型 | 説明 |
@@ -229,18 +217,15 @@ SUUMOからスクレイピングした駅ごとのワンルーム家賃相場（
 
 **注意**: 路線名の表記が駅マスタと異なる（全角JR vs 半角JR等）
 
-##### 4. price_by_station_one_room.csv
-駅マスタと家賃データをマージしたデータ（1,108駅のみマージ成功、44%）
+##### 4. ~~price_by_station_one_room.csv~~ ✅ **廃止済み**
 
-| カラム名 | データ型 | 説明 |
-|---------|---------|------|
-| `line` | TEXT | 路線名 |
-| `station` | TEXT | 駅名 |
-| `price` | FLOAT | 家賃相場（万円）、欠損値あり |
+このファイルは不要になりました（2025年10月19日リファクタリング）。
 
-**生成**: `src/pipeline/data_cleaning.py:merge_station_info()`
+**理由**:
+- `src/main.py` はDataFrameで処理するため中間ファイル不要
+- `nxt_gen/` は元データから直接生成可能
 
-**問題**: 路線名の表記揺れにより56%の駅が欠損
+**代替**: `make_merged_data()` 関数がメモリ内で処理を完結
 
 ##### 5. route_info_*.csv
 各駅から目的地への経路情報（8つの目的地ごとに生成）
@@ -274,13 +259,12 @@ SUUMOからスクレイピングした駅ごとのワンルーム家賃相場（
 
 **生成**: `src/main.py` (全route_info_*.csvを結合)
 
-#### 問題点
-- ✗ 空ファイル（analysis.py、visualization.py）が残存
-- ✗ 路線名の表記揺れで44%の駅しかマージできていない（[FIX_LINE_NAME_MAPPING.md](./FIX_LINE_NAME_MAPPING.md) 参照）
-
 #### 改善済み
+- ✓ 空ファイル（analysis.py、visualization.py）を削除（2025年10月19日）
 - ✓ Jupyterノートブック的構造を整理し、メインパイプラインを関数化（2025年10月19日）
 - ✓ ジオコーディング処理をパイプラインに統合、既存データ活用により効率化（2025年10月19日）
+- ✓ 路線名の表記揺れを完全解決（44.4% → 78.1%）、正規化ロジックを実装（2025年10月19日）
+- ✓ 中間CSV廃止、make_merged_data()をメモリ内処理に簡素化（2025年10月19日）
 
 ---
 
@@ -308,13 +292,10 @@ flowchart TD
     LOAD_EXIST --> CHECK_MISSING{不足駅<br/>あり?}
     NO_EXIST --> CHECK_MISSING
 
-    CHECK_MISSING -->|あり| FALLBACK[フォールバックデータ使用<br/>all_min_code.csv<br/>all_price_code.csv]
+    CHECK_MISSING -->|あり| API_COLLECT[Ekispert API呼び出し<br/>collect_route_info]
     CHECK_MISSING -->|なし| SKIP_API[追加収集不要]
 
-    FALLBACK --> ESTIMATE[所要時間を推定<br/>六本木データから-5分]
-    ESTIMATE --> ESTIMATE_TRANS[乗換回数を推定<br/>15分未満:0回<br/>15-30分:1回<br/>30分以上:2回]
-
-    ESTIMATE_TRANS --> SAVE_ROUTE["route_info_駅名.csv<br/>に保存"]
+    API_COLLECT --> SAVE_ROUTE["route_info_駅名.csv<br/>に保存"]
     SKIP_API --> COMBINE
     SAVE_ROUTE --> COMBINE[既存+新規を統合]
 
@@ -329,31 +310,28 @@ flowchart TD
     SAVE2 --> END([完了])
 
     style START fill:#e1f5fe
-    style FALLBACK fill:#ffccbc
-    style ESTIMATE fill:#ffe0b2
-    style ESTIMATE_TRANS fill:#ffe0b2
+    style API_COLLECT fill:#e3f2fd
     style END fill:#c8e6c9
 ```
 
 #### 重要な仕様
 
-**⚠️ API呼び出しは実装されているが使われていない**
+**既存データの活用とAPI呼び出し**
 
-- `route_collector.py`には`collect_route_info()`関数（Ekispert API呼び出し）が実装されている
-- しかし`main.py`では**使用されず**、代わりにフォールバックデータで推定している
-- フォールバックデータは六本木への経路情報（1,600駅分）
-- 虎ノ門への時間は「六本木への時間 - 5分」で推定
-- 乗換回数は所要時間から推定（15分未満:0回、15-30分:1回、30分以上:2回）
+- `route_collector.py`の`collect_route_info()`関数でEkispert API呼び出しを実行
+- 既存の`route_info_*.csv`（src/が生成）がある場合は読み込んで活用
+- 不足駅がある場合のみAPI呼び出しで追加収集（API使用量を節約）
+- すべての駅の経路情報を取得できるまで処理を継続
 
 #### 主要ファイル
 
 | ファイル | 役割 |
 |---------|------|
 | `nxt_gen/main.py` | メインパイプライン |
-| `nxt_gen/config.py` | 設定ファイル（目的地、フィルタ条件） |
-| `nxt_gen/data_loader.py` | データ読み込み・保存 |
+| `nxt_gen/config.py` | 設定ファイル（目的地、フィルタ条件）<br/>※ `PRICE_DATA_PATH` 削除、`PRICE_ORIGINAL_PATH` に変更 |
+| `nxt_gen/data_loader.py` | データ読み込み・保存<br/>※ `load_price_data()` を改修、オンデマンドでマージ生成 |
 | `nxt_gen/line_mapping.py` | 路線名正規化マッピング |
-| `nxt_gen/route_collector.py` | 経路情報収集（**未使用**） |
+| `nxt_gen/route_collector.py` | 経路情報収集（Ekispert API呼び出し） |
 | `nxt_gen/data_processor.py` | データ処理・フィルタリング |
 | `nxt_gen/webapp/app.py` | Flask Webアプリ（DB不要） |
 | `nxt_gen/webapp/templates/index.html` | 地図表示画面 |
@@ -387,13 +365,9 @@ nxt_gen/data/
 **生成**: `nxt_gen/data_loader.py:save_data()`
 
 **データソース**:
-- 座標: `data/station_address_with_coordinates.csv`
-- 家賃: `data/output/price_info/price_by_station_one_room.csv` (路線名正規化後)
-- 経路: `data/output/route_info/route_info_*.csv` または `all_min_code.csv` (フォールバック)
-
-**注意**:
-- `train_min`と`trans`は六本木データから推定（虎ノ門への時間 = 六本木 - 5分）
-- 乗換回数は所要時間から推定（15分未満:0回、15-30分:1回、30分以上:2回）
+- 座標: `data/station_master/station_address_with_coordinates.csv`
+- 家賃: `data/price_by_station/price_by_station_one_room.csv` (オンデマンドで正規化・マージ)
+- 経路: `data/output/route_info/route_info_*.csv`（既存データまたはAPI呼び出しで取得）
 
 **データ例**:
 ```csv
@@ -419,11 +393,11 @@ stations_complete.csvをフィルタリングしたデータ
 - ✓ 路線名の表記揺れを解決
 - ✓ Docker不要（pip + pythonのみ）
 - ✓ PostgreSQL不要（CSV直接利用）
+- ✓ 中間CSV廃止、オンデマンドでデータ生成（2025年10月19日）
 
 #### 問題点
-- ✗ API呼び出し機能が実装されているのに使われていない
-- ✗ フォールバックデータの推定精度が不明
 - ✗ src/の1次データに依存（独立して動作しない）
+- ✗ `line_mapping.py` が重複（`src/pipeline/data_cleaning.py` と同じ機能）
 
 ---
 
@@ -525,105 +499,6 @@ http://localhost:5000 でアクセス
 
 ---
 
-### 4. 補完スクリプト・データファイル
-
-#### geocode_missing_stations.py
-
-**役割**: 座標が欠損している駅（426駅）の座標をGoogle Maps APIで取得する単発スクリプト。
-
-**処理内容**:
-1. `station_address_with_coordinates.csv`から座標欠損駅を抽出
-2. 複数のクエリパターンで座標取得を試行
-   - パターン1: `{路線名} {駅名}駅`
-   - パターン2: `{路線名} {駅名}`
-   - パターン3: `{駅名}駅`
-   - パターン4: `{駅名}`
-3. 結果を`missing_coords_geocoded.csv`に保存
-
-**実行方法**:
-```bash
-python geocode_missing_stations.py
-```
-
-**出力ファイル**: `data/missing_coords_geocoded.csv`
-
-##### CSVファイル構造: missing_coords_geocoded.csv
-
-座標欠損駅のジオコーディング結果（426駅分）
-
-| カラム名 | データ型 | 説明 |
-|---------|---------|------|
-| `line` | TEXT | 路線名 |
-| `station` | TEXT | 駅名 |
-| `query` | TEXT | Google Maps APIに使用したクエリ文字列 |
-| `lat` | FLOAT | 緯度（取得失敗時はNone） |
-| `lng` | FLOAT | 経度（取得失敗時はNone） |
-| `success` | BOOLEAN | 座標取得の成否（True/False） |
-
-**生成**: `geocode_missing_stations.py`
-
-**データ例**:
-```csv
-line,station,query,lat,lng,success
-JR上越線,群馬総社,JR上越線 群馬総社駅,36.4158198,139.0323929,True
-JR上越線,八木原,JR上越線 八木原駅,36.4635627,139.0191274,True
-```
-
-#### all_min_code.csv / all_price_code.csv
-
-**役割**: nxt_gen/のフォールバックデータとして使用される六本木への経路情報。
-
-| ファイル | 内容 | 駅数 |
-|---------|------|------|
-| `all_min_code.csv` | 各駅から六本木への所要時間（分）と座標 | 1,603駅 |
-| `all_price_code.csv` | 各駅の家賃相場（万円）と座標 | 1,615駅 |
-
-##### CSVファイル構造: all_min_code.csv
-
-各駅から六本木への所要時間と座標（1,603駅）
-
-| カラム名 | データ型 | 説明 |
-|---------|---------|------|
-| (index) | INT | 行番号（0始まり） |
-| `min` | INT | 六本木までの所要時間（分） |
-| `from` | TEXT | 駅名 |
-| `lat` | FLOAT | 緯度 |
-| `lng` | FLOAT | 経度 |
-
-**生成**: 外部（由来不明、おそらく過去のパイプライン実行結果）
-
-**データ例**:
-```csv
-,min,from,lat,lng
-0,14,東京,35.68123620000001,139.7671248
-1,15,有楽町,35.6750133,139.7630204
-```
-
-##### CSVファイル構造: all_price_code.csv
-
-各駅の家賃相場と座標（1,615駅）
-
-| カラム名 | データ型 | 説明 |
-|---------|---------|------|
-| (index) | INT | 行番号（0始まり） |
-| `price` | FLOAT | 家賃相場（万円） |
-| `from` | TEXT | 駅名 |
-| `lat` | FLOAT | 緯度 |
-| `lng` | FLOAT | 経度 |
-
-**生成**: 外部（由来不明、おそらく過去のパイプライン実行結果）
-
-**データ例**:
-```csv
-,price,from,lat,lng
-0,9.6,東京,35.68123620000001,139.7671248
-1,10.8,有楽町,35.6750133,139.7630204
-```
-
-**使用箇所**: nxt_gen/main.py の`load_fallback_route_data()`関数
-
----
-
 ## データフロー全体図
 
 ```mermaid
@@ -645,12 +520,6 @@ flowchart TB
         CSV3[price_by_station_one_room.csv<br/>1,108駅]
         CSV4[route_info_*.csv<br/>8ファイル]
         CSV5[station_address_with_coordinates.csv<br/>2,070駅（座標あり）]
-    end
-
-    subgraph "補完"
-        SCRIPT[geocode_missing_stations.py]
-        FALL1[all_min_code.csv<br/>1,603駅]
-        FALL2[all_price_code.csv<br/>1,615駅]
     end
 
     subgraph "2次データ加工 (nxt_gen/)"
@@ -677,14 +546,9 @@ flowchart TB
     SRC_MAIN --> CSV4
     SRC_MAIN --> CSV5
 
-    CSV5 --> SCRIPT
-    SCRIPT -->|426駅の座標補完| CSV5
-
     CSV5 --> NXT_MAIN
     CSV3 --> NXT_MAIN
     CSV4 --> NXT_MAIN
-    FALL1 -.推定補完.-> NXT_MAIN
-    FALL2 -.推定補完.-> NXT_MAIN
 
     NXT_MAIN --> NXT_DATA
     NXT_DATA --> NXT_APP
@@ -701,7 +565,6 @@ flowchart TB
     style SRC_MAIN fill:#ffcdd2
     style NXT_MAIN fill:#c5e1a5
     style MAP_APP fill:#90caf9
-    style SCRIPT fill:#fff59d
 ```
 
 ---
@@ -717,21 +580,15 @@ stationscraper/
 ├── FIX_LINE_NAME_MAPPING.md                # 路線名マッピング問題の解決ガイド
 ├── PROJECT_OVERVIEW.md                     # 本ドキュメント
 │
-├── geocode_missing_stations.py             # 座標欠損補完スクリプト
-├── all_min_code.csv                        # 六本木への所要時間（1,603駅）
-├── all_price_code.csv                      # 六本木周辺の家賃（1,615駅）
-│
 ├── data/                                   # データストレージ
-│   ├── station_address.csv                 # 駅マスタ（2,496駅）
-│   ├── station_address_with_coordinates.csv # 座標付き駅マスタ（2,070駅）
-│   ├── missing_coords_geocoded.csv         # 座標補完結果
-│   ├── station_price/
-│   │   ├── station_price_one_room.csv      # ワンルーム家賃（2,167駅）
-│   │   ├── station_price_1k.csv
-│   │   └── station_price_2k.csv
+│   ├── station_master/
+│   │   ├── station_address.csv             # 駅マスタ（2,496駅）
+│   │   └── station_address_with_coordinates.csv # 座標付き駅マスタ（2,070駅）
+│   ├── price_by_station/
+│   │   ├── price_by_station_one_room.csv   # ワンルーム家賃（2,167駅）
+│   │   ├── price_by_station_1k.csv         # 1K家賃データ
+│   │   └── price_by_station_2k.csv         # 2K家賃データ
 │   └── output/
-│       ├── price_info/
-│       │   └── price_by_station_one_room.csv # マージ済み（1,108駅）
 │       ├── route_info/                     # 各目的地への経路情報
 │       │   ├── route_info_虎ノ門ヒルズ.csv
 │       │   ├── route_info_虎ノ門.csv
@@ -742,7 +599,8 @@ stationscraper/
 │       │   ├── route_info_桜田門.csv
 │       │   └── route_info_内幸町.csv
 │       └── merged/
-│           └── merged_info_one_room.csv    # 統合データ
+│           ├── mergend_info_one_room.csv   # 統合データ（タイポあり）
+│           └── merged_with_coordinates.csv # 座標付き統合データ
 │
 ├── src/                                    # 1次データ収集（オリジナル実装）
 │   ├── main.py                             # メインパイプライン
@@ -752,9 +610,7 @@ stationscraper/
 │   │   └── suumo_scraper.py                # SUUMOスクレイピング
 │   ├── apis/
 │   │   ├── ekispert.py                     # Ekispert API
-│   │   ├── google_maps.py                  # Google Maps API
-│   │   ├── analysis.py                     # ❌ 空ファイル
-│   │   └── visualization.py                # ❌ 空ファイル
+│   │   └── google_maps.py                  # Google Maps API
 │   └── pipeline/
 │       ├── data_cleaning.py                # データクリーニング
 │       ├── analysis.py                     # フィルタリング
@@ -812,12 +668,6 @@ python main.py
 
 **注意**: 初回実行時はスクレイピング・API呼び出しで数時間かかる可能性あり。
 
-### 座標補完（geocode_missing_stations.py）
-
-```bash
-python geocode_missing_stations.py
-```
-
 ### 2次データ加工（nxt_gen/）
 
 ```bash
@@ -860,15 +710,10 @@ docker-compose up
 - 独立して動作するシステムがない
 
 #### 3. **未完成部分**
-- src/apis/analysis.py（空ファイル）
-- src/apis/visualization.py（空ファイル）
 - src/config.pyの一部定数未定義
-- nxt_gen/route_collector.pyが実装されているが未使用
 
 #### 4. **データ品質**
-- 路線名の表記揺れで44%の駅しかマージできていない
-- フォールバックデータの推定精度が不明
-- 座標欠損が426駅（17%）存在
+- 路線名の表記揺れで44%の駅しかマージできていない（nxt_gen/では解決済み）
 
 #### 5. **ドキュメント不足**
 - 各実装間の関係性が不明確
@@ -879,9 +724,9 @@ docker-compose up
 
 #### 短期的改善
 
-1. **空ファイルの削除**
-   - src/apis/analysis.py
-   - src/apis/visualization.py
+1. ~~**空ファイルの削除**~~ ✅ **完了（2025年10月19日）**
+   - ✓ src/apis/analysis.py を削除
+   - ✓ src/apis/visualization.py を削除
 
 2. **設定ファイルの修正**
    - src/config.pyに不足している定数を追加
@@ -899,12 +744,7 @@ docker-compose up
    - 不要な実装を削除
 
 2. **データ品質の向上**
-   - 路線名マッピングの完全実装（FIX_LINE_NAME_MAPPING.md参照）
-   - 座標欠損の完全解消
-
-3. **API呼び出しの整理**
-   - nxt_gen/でフォールバックではなく実際にAPI呼び出しを使用
-   - または、フォールバックのみに徹する
+   - src/でも路線名マッピングを実装（現在はnxt_gen/のみ対応）
 
 #### 長期的改善
 
@@ -980,15 +820,40 @@ docker-compose up
 
 ## 変更履歴
 
+### 2025年10月19日（リファクタリング第4弾: ディレクトリ・ファイル名統一）
+- **ディレクトリ名変更**: `data/station_price/` → `data/price_by_station/` (日本人にも馴染みやすい命名に統一)
+- **CSVファイル名変更**: `station_price_*.csv` → `price_by_station_*.csv` (3ファイル)
+- **コード修正**: `src/functions.py`, `nxt_gen/config.py` のパス参照を更新
+
+### 2025年10月19日（リファクタリング第3弾: 中間CSV廃止）
+- **price_by_station_*.csv の完全廃止**: 負の遺産であった中間CSVファイルを削除
+  - 壊れたCSVキャッシュによるバグを根絶
+  - `make_merged_data()` 関数を約30行→約15行に簡素化
+  - CSV保存・読み込みロジックを完全削除
+- **nxt_gen/のデータ読み込みロジック改修**:
+  - `nxt_gen/data_loader.py` の `load_price_data()` を書き換え
+  - 元データ（`station_address_with_coordinates.csv` + `station_price_one_room.csv`）から直接生成
+  - `src/pipeline/data_cleaning.py` の正規化ロジックを再利用
+- **設定ファイル更新**:
+  - `nxt_gen/config.py`: `PRICE_DATA_PATH` → `PRICE_ORIGINAL_PATH` に変更
+- **不要関数の削除**:
+  - `src/pipeline/data_cleaning.py` の `merge_station_info()` 関数を削除（未使用）
+  - `src/functions.py` から対応するimportを削除
+- **効果**:
+  - コード行数削減: 約50行
+  - ファイルI/O削減: 中間ファイルの読み書きが不要
+  - 保守性向上: キャッシュ問題の完全解消
+  - データ整合性: 常に最新の正規化ロジックが適用される
+
 ### 2025年10月19日（リファクタリング第2弾）
 - **座標付き駅マスタの早期生成**: パイプラインで `station_address.csv` 作成後すぐに座標情報を付与する仕組みを実装
-- **geocode_station_with_retry() 関数追加**: `geocode_missing_stations.py` のロジックを汎用化して `main.py` に統合
-  - 複数のクエリパターン（路線名+駅名、駅名のみなど）で座標取得を試行し成功率を向上
+- **geocode_station() 関数追加**: 複数のクエリパターン（路線名+駅名、駅名のみなど）で座標取得を試行し成功率を向上
 - **add_geocode_to_station_master() 関数追加**: 既存座標データを活用し、欠損駅のみ新規取得する効率的な実装
   - API使用量を節約（既存データがある場合は欠損駅のみ取得）
   - 進捗表示とレート制限対応を実装
 - **ジオコーディング処理の統合**: コメントアウトされていた座標取得処理をパイプラインに正式統合
 - **不要コードの削除**: 末尾のデバッグ用コードとコメントアウトされたコードを削除
+- **geocode_missing_stations.py と missing_coords_geocoded.csv を削除**: 機能がmain.pyに統合されたため冗長なファイルを削除
 
 ### 2025年10月19日（リファクタリング第1弾）
 - **nominatim削除**: 未使用のnominatimディレクトリとドキュメント記載を削除（Google Maps API使用のため不要）
