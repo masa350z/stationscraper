@@ -1,0 +1,348 @@
+経路簡易探索
+条件の指定を簡易的に行える経路探索です。
+
+GET /v1/{format}/search/course
+parameters
+※ Requiredの「△」は、特定の条件においてそのパラメータが必須になることを示します。詳しくはパラメータのDescriptionを参照してください。
+
+Name	Type	Required	Description
+format	string	◯	レスポンスのデータ形式の指定。必須
+指定できる値:
+- xml: xml形式のデータ
+- json: json形式のデータ
+※クエリパラメータではなくパスに値を指定します。
+key	string	◯	アクセスキー 。必須
+from	string	◯	出発駅。駅コード、駅の名称、座標情報、住所情報、 地点データ が指定可能です。必須
+Example: 22828
+to	string	◯	到着駅。駅コード、駅の名称、座標情報、住所情報、 地点データ が指定可能です。必須
+Example: 35.162151120836,136.889373779296,wgs84,100
+via	string	---	経由駅。駅コード、駅の名称、座標情報が指定可能です。座標情報を指定した場合は座標から、住所情報を指定した場合は住所から、最も近い駅を指定したものとみなします。複数指定不可。省略可。
+Example: 22828
+date	int	---	探索日付。省略可
+Format: YYYYMMDD
+Default: 現在日付
+time	int	---	探索時刻。searchTypeの値にplainを指定した場合は無効です。省略可
+Format: HHMM
+Default: 現在時刻
+searchType	string	---	探索種別。省略可
+Default: departure
+plane	string	---	飛行機。省略可
+指定できる値:
+- true: 利用する
+- false: 利用しない
+Default: true
+shinkansen	string	---	新幹線(のぞみ含む)。省略可
+指定できる値:
+- true: 利用する
+- false: 利用しない
+Default: true
+limitedExpress	string	---	特急。省略可
+指定できる値:
+- true: 利用する
+- false: 利用しない
+Default: true
+bus	string	---	バス(路線バス・高速バス)。省略可
+指定できる値:
+- true: 利用する
+- false: 利用しない
+Default: true
+gcs	string	---	リクエストやレスポンスに座標が含まれる場合、座標の測地系を指定することができます。また、リクエストパラメータの座標情報はgcsパラメータとは別の測地系を個別に指定可能です。省略可
+指定できる値:
+- tokyo: 日本測地系
+- wgs84: 世界測地系
+Default: tokyo
+response
+経路探索と同等。
+
+example
+GET /v1/xml/search/course?key=アクセスキーを入力してください&from=22828&to=25853
+<?xml version="1.0" encoding="UTF-8"?>
+<ResultSet apiVersion="1.27.0.0" engineVersion="201806_02a">
+  <Course searchType="departure" dataType="onTimetable">
+    <Route timeOther="6" timeOnBoard="157" exhaustCO2="12240" index="1" exhaustCO2atPassengerCar="93475" distance="5564" timeWalk="0" transferCount="1">
+      <Point index="1">
+        <Station code="22828">
+          <Name>東京</Name>
+          <Type>train</Type>
+          <Yomi>とうきょう</Yomi>
+        </Station>
+        <Prefecture code="13">
+          <Name>東京都</Name>
+        </Prefecture>
+        <GeoPoint longi="139.46.13.59" lati="35.40.41.9" longi_d="139.770444" gcs="tokyo" lati_d="35.678083"/>
+      </Point>
+      <Line stopStationCount="4" chargeIndex="2" timeOnBoard="153" track="railway" exhaustCO2="12157" fareIndex="1" index="1" exhaustCO2atPassengerCar="92836" distance="5526">
+        <Name>ＪＲ新幹線のぞみ</Name>
+        <Type detail="shinkansen">train</Type>
+        <ArrivalState no="21">
+          <Type>normal</Type>
+          <Datetime operation="today">2018-06-05T15:23:00+09:00</Datetime>
+        </ArrivalState>
+        <Destination>広島</Destination>
+        <Number>111</Number>
+        <TimeReliability>onTimetable</TimeReliability>
+        <DepartureState no="18">
+          <Type>normal</Type>
+          <Datetime operation="today">2018-06-05T12:50:00+09:00</Datetime>
+        </DepartureState>
+        <Color>001032197</Color>
+      </Line>
+      <Point index="2">
+        <Station code="25978">
+          <Name>新大阪</Name>
+          <Type>train</Type>
+          <Yomi>しんおおさか</Yomi>
+        </Station>
+        <Prefecture code="27">
+          <Name>大阪府</Name>
+        </Prefecture>
+        <GeoPoint longi="135.30.10.0" lati="34.43.48.0" longi_d="135.502778" gcs="tokyo" lati_d="34.73"/>
+      </Point>
+      <Line stopStationCount="0" timeOnBoard="4" track="railway" exhaustCO2="83" fareIndex="1" index="2" exhaustCO2atPassengerCar="638" distance="38">
+        <Name>ＪＲ京都線・西明石行</Name>
+        <Type>train</Type>
+        <ArrivalState no="6">
+          <Type>normal</Type>
+          <Datetime operation="today">2018-06-05T15:33:00+09:00</Datetime>
+        </ArrivalState>
+        <Destination>西明石</Destination>
+        <TimeReliability>onTimetable</TimeReliability>
+        <DepartureState no="15">
+          <Type>normal</Type>
+          <Datetime operation="today">2018-06-05T15:29:00+09:00</Datetime>
+        </DepartureState>
+        <LineSymbol code="29">
+          <Name>A</Name>
+        </LineSymbol>
+        <Color>133165064</Color>
+      </Line>
+      <Point index="3">
+        <Station code="25853">
+          <Name>大阪</Name>
+          <Type>train</Type>
+          <Yomi>おおさか</Yomi>
+        </Station>
+        <Prefecture code="27">
+          <Name>大阪府</Name>
+        </Prefecture>
+        <GeoPoint longi="135.29.52.59" lati="34.41.55.39" longi_d="135.497944" gcs="tokyo" lati_d="34.698722"/>
+      </Point>
+    </Route>
+    <Price kind="FareSummary">
+      <Oneway>8750</Oneway>
+      <Round>17500</Round>
+    </Price>
+    <Price fareRevisionStatus="none" toLineIndex="2" fromLineIndex="1" kind="Fare" index="1" selected="true">
+      <Type>Fare</Type>
+      <Oneway>8750</Oneway>
+      <RevisionStatus>latest</RevisionStatus>
+      <Round>17500</Round>
+    </Price>
+    <Price kind="ChargeSummary">
+      <Oneway>4870</Oneway>
+      <Round>9740</Round>
+    </Price>
+    <Price fareRevisionStatus="none" toLineIndex="1" fromLineIndex="1" kind="Charge" index="1" selected="false">
+      <Name>指定席</Name>
+      <Type>Reserved</Type>
+      <Oneway>5500</Oneway>
+      <RevisionStatus>latest</RevisionStatus>
+      <Round>11000</Round>
+      <Rate area="Main">Low</Rate>
+    </Price>
+    <Price fareRevisionStatus="none" toLineIndex="1" fromLineIndex="1" kind="Charge" index="2" selected="true">
+      <Name>自由席</Name>
+      <Type>Free</Type>
+      <Oneway>4870</Oneway>
+      <RevisionStatus>latest</RevisionStatus>
+      <Round>9740</Round>
+    </Price>
+    <Price fareRevisionStatus="none" toLineIndex="1" fromLineIndex="1" kind="Charge" index="3" selected="false">
+      <Name>グリーン</Name>
+      <Type>Green</Type>
+      <Oneway>10480</Oneway>
+      <RevisionStatus>latest</RevisionStatus>
+      <Round>20960</Round>
+    </Price>
+    <SerializeData>VkV4QaECp2rIAsMCpgEz7noDpgEz7nkEkcIBQwAAAAKmATPueQPJAQECAQMBBAEHAQgBCgIPQv9_EKX_9wWWwQKlWSzBAqVlesECpWT9wQKlauXBAqVnbsECpWWiBpLDAQECAQPIAaUqzwIBAwYEpG8FDwZEMTExQQgDCQbDAQECAQPGAaUc4QIJAwoGRDIwM0MHBQgEB5LGAaYBM|59A6UDAgSlA5sFAAYCCADGAaYBM|59AgEDpQOhBKUDpQUACAAIksUEAQUBBgEHpIYIAcYCAQQCBQEGAQeksQgCCZHCAgEDAQ|RxAGTAAECApLDAQACAAMAwwEBAgEDAQOSwwEAAgADAMMBAQIBAwEEkQA*--T3221233232319:F332112212000:A23121141:--3644ba124607f4322a0ae1bde12fdeeabbbd0dac--0--0--0--272</SerializeData>
+  </Course>
+  :
+</ResultSet>
+GET /v1/json/search/course?key=アクセスキーを入力してください&from=22828&to=25853
+{
+  "ResultSet":{
+    "apiVersion":"1.27.0.0",
+    "engineVersion":"201806_02a",
+    "Course":{
+      {
+        "searchType":"departure",
+        "dataType":"onTimetable",
+        "SerializeData":"VkV4QaECp2rIAsMCpgEz7noDpgEz7nkEkcIBQwAAAAKmATPueQPJAQECAQMBBAEHAQgBCgIPQv9_EKX_9wWWwQKlWSzBAqVlesECpWT9wQKlauXBAqVnbsECpWWiBpLDAQECAQPIAaUqzwIBAwYEpG8FDwZEMTExQQgDCQbDAQECAQPGAaUc4QIJAwoGRDIwM0MHBQgEB5LGAaYBM|59A6UDAgSlA5sFAAYCCADGAaYBM|59AgEDpQOhBKUDpQUACAAIksUEAQUBBgEHpIYIAcYCAQQCBQEGAQeksQgCCZHCAgEDAQ|RxAGTAAECApLDAQACAAMAwwEBAgEDAQOSwwEAAgADAMMBAQIBAwEEkQA*--T3221233232319:F332112212000:A23121141:--3644ba124607f4322a0ae1bde12fdeeabbbd0dac--0--0--0--272",
+        "Price":{
+          {
+            "kind":"FareSummary",
+            "Oneway":"8750",
+            "Round":"17500"
+          },
+          {
+            "fareRevisionStatus":"none",
+            "toLineIndex":"2",
+            "fromLineIndex":"1",
+            "kind":"Fare",
+            "index":"1",
+            "selected":"true",
+            "Type":"Fare",
+            "Oneway":"8750",
+            "RevisionStatus":"latest",
+            "Round":"17500"
+          },
+          {
+            :
+          }
+        ],
+        "Route":{
+          "timeOther":"6",
+          "timeOnBoard":"157",
+          "exhaustCO2":"12240",
+          "exhaustCO2atPassengerCar":"93475",
+          "distance":"5564",
+          "timeWalk":"0",
+          "transferCount":"1",
+          "Line":{
+            {
+              "stopStationCount":"4",
+              "chargeIndex":"2",
+              "timeOnBoard":"153",
+              "track":"railway",
+              "exhaustCO2":"12157",
+              "fareIndex":"1",
+              "exhaustCO2atPassengerCar":"92836",
+              "distance":"5526",
+              "Name":"ＪＲ新幹線のぞみ",
+              "Type":{
+                "text":"train",
+                "detail":"shinkansen"
+              },
+              "ArrivalState":{
+                "no":"21",
+                "Type":"normal",
+                "Datetime":{
+                  "text":"2018-06-05T15:23:00+09:00",
+                  "operation":"today"
+                }
+              },
+              "Destination":"広島",
+              "Number":"111",
+              "TimeReliability":"onTimetable",
+              "DepartureState":{
+                "no":"18",
+                "Type":"normal",
+                "Datetime":{
+                  "text":"2018-06-05T12:50:00+09:00",
+                  "operation":"today"
+                }
+              },
+              "Color":"001032197"
+            },
+            {
+              "stopStationCount":"0",
+              "timeOnBoard":"4",
+              "track":"railway",
+              "exhaustCO2":"83",
+              "fareIndex":"1",
+              "exhaustCO2atPassengerCar":"638",
+              "distance":"38",
+              "Name":"ＪＲ京都線・西明石行",
+              "Type":"train",
+              "ArrivalState":{
+                "no":"6",
+                "Type":"normal",
+                "Datetime":{
+                  "text":"2018-06-05T15:33:00+09:00",
+                  "operation":"today"
+                }
+              },
+              "Destination":"西明石",
+              "TimeReliability":"onTimetable",
+              "DepartureState":{
+                "no":"15",
+                "Type":"normal",
+                "Datetime":{
+                  "text":"2018-06-05T15:29:00+09:00",
+                  "operation":"today"
+                }
+              },
+              "LineSymbol":{
+                "code":"29",
+                "Name":"A"
+              },
+              "Color":"133165064"
+            }
+          ],
+          "Point":{
+            {
+              "Station":{
+                "code":"22828",
+                "Name":"東京",
+                "Type":"train",
+                "Yomi":"とうきょう"
+              },
+              "Prefecture":{
+                "code":"13",
+                "Name":"東京都"
+              },
+              "GeoPoint":{
+                "longi":"139.46.13.59",
+                "lati":"35.40.41.9",
+                "longi_d":"139.770444",
+                "gcs":"tokyo",
+                "lati_d":"35.678083"
+              }
+            },
+            {
+              "Station":{
+                "code":"25978",
+                "Name":"新大阪",
+                "Type":"train",
+                "Yomi":"しんおおさか"
+              },
+              "Prefecture":{
+                "code":"27",
+                "Name":"大阪府"
+              },
+              "GeoPoint":{
+                "longi":"135.30.10.0",
+                "lati":"34.43.48.0",
+                "longi_d":"135.502778",
+                "gcs":"tokyo",
+                "lati_d":"34.73"
+              }
+            },
+            {
+              "Station":{
+                "code":"25853",
+                "Name":"大阪",
+                "Type":"train",
+                "Yomi":"おおさか"
+              },
+              "Prefecture":{
+                "code":"27",
+                "Name":"大阪府"
+              },
+              "GeoPoint":{
+                "longi":"135.29.52.59",
+                "lati":"34.41.55.39",
+                "longi_d":"135.497944",
+                "gcs":"tokyo",
+                "lati_d":"34.698722"
+              }
+            }
+          ]
+        }
+      },
+      {
+        :
+      }
+    ]
+  }
+}

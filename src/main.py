@@ -11,8 +11,9 @@ from functions import (
     add_geocode_to_station_master,
     make_rent_data,
     make_merged_data,
-    make_route_data,
+    get_or_calculate_route,
 )
+from config import ROOM_TYPE, WALK_MINUTES
 
 # %%
 # データパイプラインのメイン処理
@@ -28,15 +29,25 @@ station_with_coords_df = add_geocode_to_station_master(
     station_master_df,
     os.path.join(data_dir, "station_master", "station_address_with_coordinates.csv")
 )
+station_with_coords_df.to_csv(
+    os.path.join(data_dir, "station_master", "station_address_with_coordinates.csv"),
+    index=False
+)
 
 # 3. 家賃データを取得
 rent_data_df = make_rent_data()
 
 # 4. マージ
-merged_df = make_merged_data(station_with_coords_df, rent_data_df)
+station_coord_price_df = make_merged_data(station_with_coords_df, rent_data_df)
+station_coord_price_df.to_csv(
+    os.path.join(data_dir, "station_coord_price", f"station_coord_price_{ROOM_TYPE}.csv"),
+    index=False
+)
 
-# 5. 経路情報を取得
-route_data_dict = make_route_data(merged_df)
-
-# 6. 全経路を統合（必要に応じて）
-# final_df = merge_all_route_data(route_data_dict)
+# 5. 各目的地駅への経路計算（既存ファイルがあればキャッシュから読み込み）
+for to_station in list(WALK_MINUTES.keys()):
+    output_path = os.path.join(
+        data_dir, "calclated_routes", f"calclated_routes_{to_station}.csv"
+    )
+    df = get_or_calculate_route(station_coord_price_df, to_station, output_path)
+    df.to_csv(output_path, index=False)

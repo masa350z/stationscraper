@@ -33,17 +33,18 @@ graph TB
 
     subgraph "データストレージ (data/)"
         D1[station_address.csv<br/>駅マスタ]
-        D2[station_price/<br/>家賃データ]
-        D3[output/price_info/<br/>マージ済み家賃]
-        D4[output/route_info/<br/>経路情報]
+        D2[price_by_station/<br/>家賃データ]
+        D3[station_coord_price/<br/>駅+座標+家賃マージ]
+        D4[calclated_routes/<br/>経路情報]
         D5[station_address_with_coordinates.csv<br/>座標付き駅マスタ]
 
         SCRAPER1 --> D1
         SCRAPER2 --> D2
-        D1 --> D3
-        D2 --> D3
-        API1 --> D4
         API2 --> D5
+        D5 --> D3
+        D2 --> D3
+        D3 --> D4
+        API1 --> D4
     end
 
     subgraph "2次データ加工 (nxt_gen/)"
@@ -53,7 +54,7 @@ graph TB
         NXT_WEB[nxt_gen/webapp/<br/>Flask Webアプリ<br/>No DB版]
 
         D5 --> NXT
-        D3 --> NXT
+        D2 --> NXT
         D4 --> NXT
         NXT --> NXT_NORM
         NXT --> NXT_OUT
@@ -106,45 +107,50 @@ flowchart TD
     SAVE1B --> CHECK2{家賃CSV<br/>存在?}
     CHECK2 -->|なし| SCRAPE2[SUUMO<br/>スクレイピング]
     CHECK2 -->|あり| SKIP2[既存使用]
-    SCRAPE2 --> SAVE2[station_price_one_room.csv]
+    SCRAPE2 --> SAVE2[price_by_station_2k.csv]
     SKIP2 --> SAVE2
 
-    SAVE2 --> MERGE1[座標付き駅マスタ+家賃<br/>メモリ内でマージ<br/>※CSV保存なし]
+    SAVE2 --> MERGE1[座標付き駅マスタ+家賃<br/>マージして保存]
+    MERGE1 --> SAVE3[station_coord_price_2k.csv]
 
-    MERGE1 --> LOOP[目的地ごとに処理<br/>8駅分]
+    SAVE3 --> LOOP[目的地ごとに処理<br/>WALK_MINUTES全駅]
     LOOP --> CHECK3{経路CSV<br/>存在?}
-    CHECK3 -->|なし| API1[Ekispert API<br/>所要時間取得]
-    CHECK3 -->|あり| SKIP3[既存使用]
-    API1 --> SAVE4["route_info_駅名.csv"]
-    SKIP3 --> SAVE4
+    CHECK3 -->|あり| SKIP3[既存ファイル読込<br/>get_or_calculate_route]
+    CHECK3 -->|なし| API1[Ekispert API<br/>経路情報取得<br/>calculate_min_route]
+    SKIP3 --> SAVE4["calclated_routes_駅名.csv"]
+    API1 --> SAVE4
 
-    SAVE4 --> ADD_WALK[徒歩時間加算]
-    ADD_WALK --> CHECK_MORE{他の目的地?}
+    SAVE4 --> CHECK_MORE{他の目的地?}
     CHECK_MORE -->|あり| LOOP
-    CHECK_MORE -->|なし| CONCAT[全データ結合]
-
-    CONCAT --> SAVE5[merged_info_one_room.csv]
+    CHECK_MORE -->|なし| END([完了])
 
     style START fill:#e1f5fe
     style SCRAPE1 fill:#fff3e0
     style SCRAPE2 fill:#fff3e0
     style API1 fill:#fff3e0
     style GEOCODE fill:#e1bee7
+    style END fill:#c8e6c9
 ```
+
+**現在の実装の特徴**:
+- ステップ4でマージ結果を `station_coord_price_{ROOM_TYPE}.csv` に保存
+- ステップ5で `get_or_calculate_route()` ヘルパー関数を使用し既存ファイルをキャッシュとして活用
+- 出力先は `data/calclated_routes/` ディレクトリ
+- 徒歩時間加算、全データ結合は**未実装**（将来の予定）
 
 #### 主要ファイル
 
 | ファイル | 役割 | 状態 |
 |---------|------|------|
-| `src/main.py` | メインパイプライン（関数化済み）<br/>- `geocode_station_with_retry()`: 複数パターンで座標取得<br/>- `add_geocode_to_station_master()`: 駅マスタに座標付与<br/>- `make_*()`: パイプライン各ステップの関数群 | ✅ 動作 |
-| `src/functions.py` | パイプライン関数群<br/>- `make_merged_data()`: メモリ内でデータマージ（CSV保存なし） | ✅ 動作 |
-| `src/config.py` | 設定ファイル（API KEY、目的地など） | ⚠️ 一部定数未定義 |
+| `src/main.py` | メインパイプライン（関数化済み）<br/>- 5ステップ処理: 駅マスタ取得→座標付与→家賃取得→マージ→経路計算<br/>- `WALK_MINUTES` の各目的地への経路計算ループ | ✅ 動作 |
+| `src/functions.py` | パイプライン関数群<br/>- `make_station_master()`: 駅マスタ取得<br/>- `add_geocode_to_station_master()`: 座標付与（既存データ活用）<br/>- `make_rent_data()`: 家賃データ取得<br/>- `make_merged_data()`: マージ処理（CSV保存あり）<br/>- `calculate_min_route()`: Ekispert API で経路計算<br/>- `get_or_calculate_route()`: キャッシュ機能付き経路取得ヘルパー | ✅ 動作 |
+| `src/config.py` | 設定ファイル<br/>- `EKISPERT_KEY`, `GOOGLE_MAPS_KEY`: API キー<br/>- `ROOM_TYPE`: 部屋タイプ (2k)<br/>- `WALK_MINUTES`: 目的地駅と徒歩時間のマッピング | ✅ 動作 |
 | `src/scrapers/traveltowns_scraper.py` | TravelTownsスクレイピング | ✅ 動作 |
 | `src/scrapers/suumo_scraper.py` | SUUMOスクレイピング | ✅ 動作 |
-| `src/apis/ekispert.py` | Ekispert API呼び出し | ✅ 動作 |
+| `src/apis/ekispert.py` | Ekispert API呼び出し<br/>- 駅名正規化フォールバック機能追加済み | ✅ 動作 |
 | `src/apis/google_maps.py` | Google Maps API呼び出し | ✅ 動作 |
 | `src/pipeline/data_cleaning.py` | データクリーニング・路線名正規化 | ✅ 動作 |
-| `src/pipeline/analysis.py` | フィルタリング処理 | ⚠️ config.pyの未定義定数に依存 |
+| `src/pipeline/analysis.py` | フィルタリング処理 | ✅ 動作 |
 | `src/pipeline/visualization.py` | 散布図描画 | ✅ 動作 |
 
 #### 生成されるデータ
@@ -155,23 +161,26 @@ data/
 │   ├── station_address.csv                      # 駅マスタ（2,496駅）
 │   └── station_address_with_coordinates.csv     # 座標付き駅マスタ（2,496駅、全駅に座標あり）
 ├── price_by_station/
-│   ├── price_by_station_one_room.csv            # 家賃データ（2,167駅）
+│   ├── price_by_station_one_room.csv            # ワンルーム家賃データ（2,167駅）
 │   ├── price_by_station_1k.csv                  # 1K家賃データ
 │   └── price_by_station_2k.csv                  # 2K家賃データ
-└── output/
-    ├── route_info/
-    │   ├── route_info_虎ノ門ヒルズ.csv
-    │   ├── route_info_虎ノ門.csv
-    │   ├── route_info_新橋.csv
-    │   ├── route_info_霞ケ関.csv
-    │   ├── route_info_国会議事堂前.csv
-    │   ├── route_info_溜池山王.csv
-    │   ├── route_info_桜田門.csv
-    │   └── route_info_内幸町.csv                # 各目的地への経路情報
-    └── merged/
-        ├── mergend_info_one_room.csv            # 統合データ（タイポあり）
-        └── merged_with_coordinates.csv          # 座標付き統合データ
+├── station_coord_price/
+│   ├── station_coord_price_one_room.csv         # 駅+座標+家賃マージデータ（ワンルーム）
+│   ├── station_coord_price_1k.csv               # 駅+座標+家賃マージデータ（1K）
+│   └── station_coord_price_2k.csv               # 駅+座標+家賃マージデータ（2K）
+└── calclated_routes/
+    ├── calclated_routes_虎ノ門ヒルズ.csv
+    ├── calclated_routes_虎ノ門.csv
+    ├── calclated_routes_新橋.csv
+    ├── calclated_routes_霞ケ関.csv
+    ├── calclated_routes_国会議事堂前.csv
+    ├── calclated_routes_溜池山王.csv
+    ├── calclated_routes_桜田門.csv
+    ├── calclated_routes_内幸町.csv
+    └── ...（WALK_MINUTESの全目的地）          # 各目的地への経路情報
 ```
+
+**注**: `data/output/route_info/` と `data/output/merged/` はレガシーディレクトリ（現在は生成されていない）
 
 #### CSVファイル構造詳細
 
@@ -217,47 +226,88 @@ SUUMOからスクレイピングした駅ごとのワンルーム家賃相場（
 
 **注意**: 路線名の表記が駅マスタと異なる（全角JR vs 半角JR等）
 
-##### 4. ~~price_by_station_one_room.csv~~ ✅ **廃止済み**
+##### 4. station_coord_price_{room_type}.csv
+駅マスタ、座標、家賃相場を統合したマージデータ
 
-このファイルは不要になりました（2025年10月19日リファクタリング）。
+| カラム名 | データ型 | 説明 |
+|---------|---------|------|
+| `line` | TEXT | 路線名（正規化済み） |
+| `station` | TEXT | 駅名 |
+| `lat` | FLOAT | 緯度 |
+| `lng` | FLOAT | 経度 |
+| `price` | FLOAT | 家賃相場（万円）、欠損値あり |
 
-**理由**:
-- `src/main.py` はDataFrameで処理するため中間ファイル不要
-- `nxt_gen/` は元データから直接生成可能
+**保存先**: `data/station_coord_price/station_coord_price_{ROOM_TYPE}.csv`
 
-**代替**: `make_merged_data()` 関数がメモリ内で処理を完結
+**生成**: `src/main.py` ステップ4（`make_merged_data()` → CSV保存）
 
-##### 5. route_info_*.csv
-各駅から目的地への経路情報（8つの目的地ごとに生成）
+**特徴**:
+- 路線名正規化によりマージ率向上（44.4% → 78.1%）
+- 座標がない駅、家賃データがない駅も含む（欠損値として保持）
+- 経路計算の入力データとして使用
+
+##### 5. calclated_routes_{駅名}.csv
+各駅から特定の目的地駅への最適経路情報
 
 | カラム名 | データ型 | 説明 |
 |---------|---------|------|
 | `line` | TEXT | 路線名 |
 | `price` | FLOAT | 家賃相場（万円） |
 | `from` | TEXT | 出発駅 |
-| `to` | TEXT | 目的駅（虎ノ門、新橋など） |
+| `to` | TEXT | 目的駅（虎ノ門ヒルズ、内幸町など） |
 | `trans` | INT | 乗換回数 |
-| `min` | INT | 電車の所要時間（分） |
-| `train+walk_min` | INT | 電車+徒歩の合計時間（分） |
+| `min` | INT | 所要時間（分）電車のみ |
 
-**生成**: `src/main.py` (Ekispert API経由)
+**保存先**: `data/calclated_routes/calclated_routes_{目的地駅名}.csv`
 
-**目的地**: 虎ノ門ヒルズ、虎ノ門、新橋、霞ケ関、国会議事堂前、溜池山王、桜田門、内幸町
+**生成**: `src/main.py` ステップ5（`get_or_calculate_route()` → CSV保存）
 
-##### 6. merged_info_one_room.csv
-全目的地の経路情報を統合したデータ
+**目的地**: `WALK_MINUTES` に定義された全駅（虎ノ門ヒルズ、内幸町、大塚など）
 
-| カラム名 | データ型 | 説明 |
-|---------|---------|------|
-| `line` | TEXT | 路線名 |
-| `price` | FLOAT | 家賃相場（万円） |
-| `from` | TEXT | 出発駅 |
-| `to` | TEXT | 目的駅 |
-| `trans` | INT | 乗換回数 |
-| `min` | INT | 電車の所要時間（分） |
-| `train+walk_min` | INT | 電車+徒歩の合計時間（分） |
+**特徴**:
+- 既存ファイルがあれば読み込み（API呼び出しをスキップ）
+- priceがNaNの駅はスキップされる
+- 徒歩時間は**含まれていない**（将来実装予定）
 
-**生成**: `src/main.py` (全route_info_*.csvを結合)
+---
+
+### レガシーCSVファイル（現在は生成されていない）
+
+以下のファイルは過去のバージョンで生成されていましたが、現在の実装では生成されていません。
+
+##### route_info_*.csv ⚠️ **レガシー**
+
+**保存先**: `data/output/route_info/route_info_{目的地駅名}.csv`
+
+**現状**: 現在の `src/main.py` では生成されていません。`calclated_routes/` に置き換えられました。
+
+**過去の用途**: 各駅から目的地への経路情報（徒歩時間加算済み）
+
+##### merged_info_one_room.csv ⚠️ **レガシー**
+
+**保存先**: `data/output/merged/merged_info_one_room.csv`
+
+**現状**: 現在の `src/main.py` では生成されていません。
+
+**過去の用途**: 全目的地の経路情報を統合したデータ
+
+---
+
+#### 将来の実装予定
+
+以下の機能は現在実装されていませんが、実装予定です：
+
+1. **徒歩時間を考慮した通勤時間DataFrame作成**
+   - `calclated_routes_{駅名}.csv` に `WALK_MINUTES` の徒歩時間を加算
+   - 新カラム `total_commute_time` = `min` + `walk_min`
+
+2. **複数条件での絞り込み処理**
+   - 家賃上限、通勤時間上限、乗換回数上限などのフィルタリング
+   - フィルタリング済みデータを別ファイルに保存
+
+3. **フロントエンド用マスターCSV作成**
+   - 地図可視化アプリ用の最終データセット生成
+   - 必要なカラムのみを含むシンプルなCSV
 
 #### 改善済み
 - ✓ 空ファイル（analysis.py、visualization.py）を削除（2025年10月19日）
@@ -265,6 +315,9 @@ SUUMOからスクレイピングした駅ごとのワンルーム家賃相場（
 - ✓ ジオコーディング処理をパイプラインに統合、既存データ活用により効率化（2025年10月19日）
 - ✓ 路線名の表記揺れを完全解決（44.4% → 78.1%）、正規化ロジックを実装（2025年10月19日）
 - ✓ 中間CSV廃止、make_merged_data()をメモリ内処理に簡素化（2025年10月19日）
+- ✓ main.pyを temp.py ベースに書き換え、calclated_routes/ に出力（2025年10月20日）
+- ✓ get_or_calculate_route() ヘルパー関数追加でキャッシュ対応（2025年10月20日）
+- ✓ station_coord_price_{ROOM_TYPE}.csv をパイプラインで生成・保存（2025年10月20日）
 
 ---
 
@@ -278,15 +331,15 @@ src/で生成された1次データを読み込み、路線名正規化やフィ
 ```mermaid
 flowchart TD
     START([python nxt_gen/main.py]) --> LOAD1[駅マスタ読込<br/>station_address_with_coordinates.csv]
-    LOAD1 --> LOAD2[家賃データ読込<br/>price_by_station_one_room.csv]
+    LOAD1 --> LOAD2[家賃データ読込<br/>price_by_station_2k.csv]
 
     LOAD2 --> NORM[路線名正規化<br/>line_mapping.py]
     NORM --> MERGE[駅マスタ+家賃<br/>マージ]
 
-    MERGE --> LOOP_START[目的地ごとに処理<br/>8駅分]
+    MERGE --> LOOP_START[目的地ごとに処理<br/>WALK_MINUTES全駅]
 
     LOOP_START --> CHECK_EXIST{既存経路データ<br/>あり?}
-    CHECK_EXIST -->|あり| LOAD_EXIST["既存データ読込<br/>route_info_駅名.csv"]
+    CHECK_EXIST -->|あり| LOAD_EXIST["既存データ読込<br/>calclated_routes_駅名.csv"]
     CHECK_EXIST -->|なし| NO_EXIST[既存データなし]
 
     LOAD_EXIST --> CHECK_MISSING{不足駅<br/>あり?}
@@ -295,7 +348,7 @@ flowchart TD
     CHECK_MISSING -->|あり| API_COLLECT[Ekispert API呼び出し<br/>collect_route_info]
     CHECK_MISSING -->|なし| SKIP_API[追加収集不要]
 
-    API_COLLECT --> SAVE_ROUTE["route_info_駅名.csv<br/>に保存"]
+    API_COLLECT --> SAVE_ROUTE["calclated_routes_駅名.csv<br/>に保存"]
     SKIP_API --> COMBINE
     SAVE_ROUTE --> COMBINE[既存+新規を統合]
 
@@ -319,7 +372,7 @@ flowchart TD
 **既存データの活用とAPI呼び出し**
 
 - `route_collector.py`の`collect_route_info()`関数でEkispert API呼び出しを実行
-- 既存の`route_info_*.csv`（src/が生成）がある場合は読み込んで活用
+- 既存の`calclated_routes_*.csv`（src/が生成）がある場合は読み込んで活用
 - 不足駅がある場合のみAPI呼び出しで追加収集（API使用量を節約）
 - すべての駅の経路情報を取得できるまで処理を継続
 
@@ -516,10 +569,10 @@ flowchart TB
 
     subgraph "1次データ (data/)"
         CSV1[station_address.csv<br/>2,496駅]
-        CSV2[station_price_one_room.csv<br/>2,167駅]
-        CSV3[price_by_station_one_room.csv<br/>1,108駅]
-        CSV4[route_info_*.csv<br/>8ファイル]
-        CSV5[station_address_with_coordinates.csv<br/>2,070駅（座標あり）]
+        CSV2[price_by_station_2k.csv<br/>2,167駅]
+        CSV3[station_coord_price_2k.csv<br/>駅+座標+家賃マージ]
+        CSV4[calclated_routes_*.csv<br/>WALK_MINUTES全駅分]
+        CSV5[station_address_with_coordinates.csv<br/>2,496駅（全駅座標あり）]
     end
 
     subgraph "2次データ加工 (nxt_gen/)"
@@ -542,12 +595,15 @@ flowchart TB
 
     SRC_MAIN --> CSV1
     SRC_MAIN --> CSV2
-    SRC_MAIN --> CSV3
-    SRC_MAIN --> CSV4
     SRC_MAIN --> CSV5
+    CSV5 --> CSV3
+    CSV2 --> CSV3
+    SRC_MAIN --> CSV3
+    CSV3 --> CSV4
+    SRC_MAIN --> CSV4
 
     CSV5 --> NXT_MAIN
-    CSV3 --> NXT_MAIN
+    CSV2 --> NXT_MAIN
     CSV4 --> NXT_MAIN
 
     NXT_MAIN --> NXT_DATA
@@ -583,24 +639,25 @@ stationscraper/
 ├── data/                                   # データストレージ
 │   ├── station_master/
 │   │   ├── station_address.csv             # 駅マスタ（2,496駅）
-│   │   └── station_address_with_coordinates.csv # 座標付き駅マスタ（2,070駅）
+│   │   └── station_address_with_coordinates.csv # 座標付き駅マスタ（2,496駅、全駅座標あり）
 │   ├── price_by_station/
 │   │   ├── price_by_station_one_room.csv   # ワンルーム家賃（2,167駅）
 │   │   ├── price_by_station_1k.csv         # 1K家賃データ
 │   │   └── price_by_station_2k.csv         # 2K家賃データ
-│   └── output/
-│       ├── route_info/                     # 各目的地への経路情報
-│       │   ├── route_info_虎ノ門ヒルズ.csv
-│       │   ├── route_info_虎ノ門.csv
-│       │   ├── route_info_新橋.csv
-│       │   ├── route_info_霞ケ関.csv
-│       │   ├── route_info_国会議事堂前.csv
-│       │   ├── route_info_溜池山王.csv
-│       │   ├── route_info_桜田門.csv
-│       │   └── route_info_内幸町.csv
-│       └── merged/
-│           ├── mergend_info_one_room.csv   # 統合データ（タイポあり）
-│           └── merged_with_coordinates.csv # 座標付き統合データ
+│   ├── station_coord_price/
+│   │   ├── station_coord_price_one_room.csv # 駅+座標+家賃マージ（ワンルーム）
+│   │   ├── station_coord_price_1k.csv      # 駅+座標+家賃マージ（1K）
+│   │   └── station_coord_price_2k.csv      # 駅+座標+家賃マージ（2K）
+│   ├── calclated_routes/                   # 各目的地への経路情報（現在）
+│   │   ├── calclated_routes_虎ノ門ヒルズ.csv
+│   │   ├── calclated_routes_虎ノ門.csv
+│   │   ├── calclated_routes_新橋.csv
+│   │   ├── calclated_routes_内幸町.csv
+│   │   ├── calclated_routes_大塚.csv
+│   │   └── ...（WALK_MINUTES全駅）
+│   └── output/                             # レガシーディレクトリ（現在は未使用）
+│       ├── route_info/                     # ⚠️ レガシー（現在生成されない）
+│       └── merged/                         # ⚠️ レガシー（現在生成されない）
 │
 ├── src/                                    # 1次データ収集（オリジナル実装）
 │   ├── main.py                             # メインパイプライン
@@ -860,7 +917,23 @@ docker-compose up
 - **line_url.csv削除**: 過去の実装で使われていた中間ファイルを削除（現在は`scrape_traveltowns_kanto()`関数に統合済み）
 - **src/main.pyリファクタリング**: メインパイプラインを5つのヘルパー関数（`make_*()`）に分割し可読性を向上
 
+### 2025年10月20日（main.py 実装更新）
+- **main.py を temp.py ベースに書き換え**:
+  - 処理フローを明確化: 駅マスタ取得→座標付与→家賃取得→マージ→経路計算の5ステップ
+  - `make_route_data()` 削除 → `calculate_min_route()` + ループ処理に変更
+  - 出力先を `data/calclated_routes/calclated_routes_{駅名}.csv` に変更（レガシーの `route_info/` から移行）
+  - `station_coord_price_{ROOM_TYPE}.csv` の保存処理を追加（ステップ4）
+- **get_or_calculate_route() ヘルパー関数追加**（`src/functions.py`）:
+  - 既存ファイルがあれば読み込み、なければ計算する仕組み
+  - API 呼び出しを削減しパフォーマンス向上
+  - ログ出力で処理状況を可視化（"既存ファイルを読み込みました" / "経路情報を計算中..."）
+- **将来の実装予定を明記**:
+  - 徒歩時間を考慮した通勤時間DataFrame作成（予定）
+  - 複数条件での絞り込み処理（予定）
+  - フロントエンド用マスターCSV作成（予定）
+- **ドキュメント更新**: PROJECT_OVERVIEW.md を現在の実装状況に正確に反映
+
 ---
 
 **作成者**: Claude Code
-**最終更新**: 2025年10月19日
+**最終更新**: 2025年10月20日

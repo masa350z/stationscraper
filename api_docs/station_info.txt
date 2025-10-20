@@ -1,0 +1,319 @@
+駅情報
+指定された条件に当てはまる駅の情報を返します。
+
+GET /v1/{format}/station
+parameters
+※ Requiredの「△」は、特定の条件においてそのパラメータが必須になることを示します。詳しくはパラメータのDescriptionを参照してください。
+
+Name	Type	Required	Description
+format	string	◯	レスポンスのデータ形式の指定。必須。
+指定できる値:
+- xml: xml形式のデータ
+- json: json形式のデータ
+※クエリパラメータではなくパスに値を指定します。
+key	string	◯	アクセスキーの指定。必須
+name	string	---	候補文字列。oldName, code, corporationName, railName, operationLineCode と排他。かつ省略可なため、排他のパラメータが存在しない場合はname省略扱いとなります。
+oldName	string	---	駅の旧名称。name, code, corporationName, railName, operationLineCode と排他。
+※路線バス停名は旧名称に対応していません。
+code	int	---	駅コード。name, oldName, corporationName, railName, operationLineCode と排他。
+corporationName	string	---	会社。name, code, railName, operationLineCode と排他。
+railName	string	---	「駅すぱあと」の平均路線名。name, code, corporationName, operationLineCode と排他。
+operationLineCode	string	---	運行路線コード。name, oldName, code, corporationName, railName と排他。
+type	string	---	駅の路線の交通種別 。oldName, code, corporationName, railName, operationLineCode 利用時には無効です。複数指定可。省略可。省略時は指定なしとなります。
+prefectureCode	int	---	都道府県コード。省略可。複数指定可。oldName, code, railName, operationLineCode 指定時無効です。省略時は全国が対象となります。
+offset	int	---	データの取得開始位置。省略可。oldName, code, railName, operationLineCode 指定時無効です。
+Default: 1
+※ 詳しくは駅情報・路線情報・会社情報を全件取得するをご確認ください。
+limit	int	---	データのブロック件数。省略可。oldName, code, railName, operationLineCode 指定時無効です。最大100件。
+Default: 100
+direction	string	---	路線の停車駅取得方向。railName, operationLineCode 指定時のみ有効。
+指定できる値:
+- up: 通常
+- down: 反転
+- none: 指定なし
+Default: up
+corporationBind	string	---	固定会社名。指定した会社のみ利用します。複数指定可。最大50件。省略可。省略時は制限のない通常の取得となります。
+addGateGroup	string	---	結果の駅に出口グループ(鉄道のみ)を付加するかどうかを指定します。省略可。
+指定できる値:
+- true: 付加します
+- false: 付加しません
+Default: false
+communityBus	string	---	取得結果の路線バスに対するコミュニティバスの扱いを指定します。
+type未指定時またはtypeにbusおよびbus.local指定時のみ有効。oldName, code, corporationName, railName, operationLineCode, corporationBind 利用時には無効。省略可。
+指定できる値:
+- contain:除外しない
+- except:除外する
+Default: contain
+gcs	string	---	リクエストやレスポンスに座標が含まれる場合、座標の測地系を指定することができます。また、リクエストパラメータの座標情報はgcsパラメータとは別の測地系を個別に指定可能です。省略可。
+指定できる値:
+- tokyo: 日本測地系
+- wgs84: 世界測地系
+Default: tokyo
+response
+Name	Description
+ResultSet / apiVersion	WebAPIバージョン
+ResultSet / engineVersion	エンジンバージョン
+ResultSet / max	データの全件数。
+※ 一度に取得できない場合は、offsetの指定を繰り上げて取得してください。詳しくは駅情報・路線情報・会社情報を全件取得するをご確認ください。
+ResultSet / offset	データ開始位置のオフセット値
+ResultSet / Point	地点を表す要素
+ResultSet / Point / index	インデックス。
+※ jsonデータ形式のレスポンスにインデックスは含まれません。JSON形式のレスポンスデータを利用する際の注意事項
+※ railName指定時付加
+ResultSet / Point / getOn	乗車可能フラグ。
+- true: 可能
+- false: 不可能
+※ railName指定時付加
+ResultSet / Point / getOff	降車可能フラグ。
+- true: 可能
+- false: 不可能
+※ railName指定時付加
+ResultSet / Point / onRoute	区間内フラグ。
+- true: 対象経路の区間内
+- false: 区間外
+※ railName指定時付加
+ResultSet / Point / onRouteEdge	区間の端フラグ。
+- true: 対象経路の端
+- false: 端以外
+※ railName指定時付加
+ResultSet / Point / GeoPoint	座標を表す要素
+ResultSet / Point / GeoPoint / lati	緯度。度分秒(DMS)単位。秒は小数第３位を四捨五入。
+Format: 度.分.秒.1/100秒
+Example: 35.42.6.0
+ResultSet / Point / GeoPoint / lati_d	緯度。十進法度(DD)単位。
+Format: 度
+Example: 35.701667
+ResultSet / Point / GeoPoint / longi	経度。度分秒(DMS)単位。秒は小数第３位を四捨五入。
+Format: 度.分.秒.1/100秒
+Example: 139.38.22.30
+ResultSet / Point / GeoPoint / longi_d	経度。十進法度(DD)単位。
+Format: 度
+Example: 139.639527
+ResultSet / Point / GeoPoint / gcs	測地系
+ResultSet / Point / Prefecture	都道府県を表す要素
+ResultSet / Point / Prefecture / code	都道府県コード
+ResultSet / Point / Prefecture / Name	都道府県の名称
+ResultSet / Point / Station	駅を表す要素
+ResultSet / Point / Station / code	駅コード
+ResultSet / Point / Station / Name	駅の名称を表す要素
+ResultSet / Point / Station / OldName	旧名称を表す要素。
+※ oldName指定時付加
+ResultSet / Point / Station / Type	交通種別を表す要素
+ResultSet / Point / Station / Type / detail	交通種別の詳細。複数の場合は:区切り。
+ResultSet / Point / Station / Yomi	駅の読みかなを表す要素
+ResultSet / Point / Station / GateGroup /	出口グループを表す要素
+ResultSet / Point / Station / GateGroup / Gate	出口を表す要素
+ResultSet / Point / Station / GateGroup / Gate / code	出口コード
+ResultSet / Point / Station / GateGroup / Gate / Name	出口の名称を表す要素
+ResultSet / Point / Station / GateGroup / Gate / GeoPoint	座標を表す要素
+ResultSet / Point / Station / GateGroup / Gate / GeoPoint / lati	緯度。度分秒(DMS)単位。秒は小数第３位を四捨五入。
+Format: 度.分.秒.1/100秒
+Example: 35.42.6.0
+ResultSet / Point / Station / GateGroup / Gate / GeoPoint / lati_d	緯度。十進法度(DD)単位。
+Format: 度
+Example: 35.701667
+ResultSet / Point / Station / GateGroup / Gate / GeoPoint / longi	経度。度分秒(DMS)単位。秒は小数第３位を四捨五入。
+Format: 度.分.秒.1/100秒
+Example: 139.38.22.30
+ResultSet / Point / Station / GateGroup / Gate / GeoPoint / longi_d	経度。十進法度(DD)単位。
+Format: 度
+Example: 139.639527
+ResultSet / Point / Station / GateGroup / Gate / GeoPoint / gcs	測地系
+ResultSet / RoundTripType	往復の種類を表す要素。railNameを指定した時のみ付加します。
+- same: 往復が同じ停車駅を通過する場合
+- different: 往復で異なる停車駅を通過する場合
+- none: 往復共に停車駅が存在しない場合(廃止路線等)
+- other: same, different, noneに当てはまらない場合(環状線や片道運行等)
+example
+GET /v1/xml/station?key=アクセスキーを入力してください&code=22828
+<?xml version="1.0" encoding="UTF-8"?>
+<ResultSet apiVersion="1.14.0.0" engineVersion="201404_01a">
+  <Point>
+    <Prefecture code="13">
+      <Name>東京都</Name>
+    </Prefecture>
+    <GeoPoint gcs="tokyo" lati_d="35.678082" longi_d="139.770443" lati="35.40.41.9" longi="139.46.13.59"/>
+    <Station code="22828">
+      <Name>東京</Name>
+      <Yomi>とうきょう</Yomi>
+      <Type>train</Type>
+    </Station>
+  </Point>
+</ResultSet>
+GET /v1/json/station?key=アクセスキーを入力してください&code=22828
+{
+  "ResultSet": {
+    "apiVersion": "1.14.0.0",
+    "engineVersion": "201404_01a",
+    "Point": {
+      "Prefecture": {
+        "code": "13",
+        "Name": "東京都"
+      },
+      "GeoPoint": {
+        "gcs": "tokyo",
+        "lati_d": "35.678082",
+        "longi_d": "139.770443",
+        "lati": "35.40.41.9",
+        "longi": "139.46.13.59"
+      },
+      "Station": {
+        "code": "22828",
+        "Name": "東京",
+        "Yomi": "とうきょう",
+        "Type": "train"
+      }
+    }
+  }
+}
+GET /v1/xml/station?key=アクセスキーを入力してください&oldName=上鯖江
+<?xml version="1.0" encoding="UTF-8"?>
+<ResultSet apiVersion="1.14.0.0" engineVersion="201404_01a">
+  <Point>
+    <Prefecture code="18">
+      <Name>福井県</Name>
+    </Prefecture>
+    <GeoPoint gcs="tokyo" lati_d="35.933415" longi_d="136.183499" lati="35.56.0.29" longi="136.11.0.59"/>
+    <Station code="23799">
+      <Name>サンドーム西</Name>
+      <Yomi>さんどーむにし</Yomi>
+      <OldName>上鯖江</OldName>
+      <Type>train</Type>
+    </Station>
+  </Point>
+</ResultSet>
+GET /v1/json/station?key=アクセスキーを入力してください&oldName=上鯖江
+{
+  "ResultSet": {
+    "apiVersion": "1.14.0.0",
+    "engineVersion": "201404_01a",
+    "Point": {
+      "Prefecture": {
+        "code": "18",
+        "Name": "福井県"
+      },
+      "GeoPoint": {
+        "gcs": "tokyo",
+        "lati_d": "35.933415",
+        "longi_d": "136.183499",
+        "lati": "35.56.0.29",
+        "longi": "136.11.0.59"
+      },
+      "Station": {
+        "code": "23799",
+        "Name": "サンドーム西",
+        "Yomi": "さんどーむにし",
+        "OldName": "上鯖江",
+        "Type": "train"
+      }
+    }
+  }
+}
+GET /v1/xmlstation?key=アクセスキーを入力してください&code=22828&addGateGroup=true
+<?xml version="1.0" encoding="UTF-8"?>
+<ResultSet apiVersion="1.14.0.0" engineVersion="201404_01a">
+  <Point>
+    <Prefecture code="13">
+      <Name>東京都</Name>
+    </Prefecture>
+    <GeoPoint gcs="tokyo" lati_d="35.678082" longi_d="139.770443" lati="35.40.41.9" longi="139.46.13.59"/>
+    <Station code="22828">
+      <Name>東京</Name>
+      <Yomi>とうきょう</Yomi>
+      <Type>train</Type>
+      <GateGroup>
+        <Gate code="G4663">
+          <Name>丸の内中央口</Name>
+          <GeoPoint longi="139.46.8.78" lati="35.40.41.52" longi_d="139.769107" gcs="tokyo" lati_d="35.678201"/>
+        </Gate>
+      </GateGroup>
+      <GateGroup>
+        <Gate code="G4581">
+          <Name>丸の内北口</Name>
+          <GeoPoint longi="139.46.9.65" lati="35.40.44.43" longi_d="139.769349" gcs="tokyo" lati_d="35.679009"/>
+        </Gate>
+        <Gate code="G4641">
+          <Name>丸の内北口(地下鉄側)</Name>
+          <GeoPoint longi="139.46.9.22" lati="35.40.44.83" longi_d="139.769229" gcs="tokyo" lati_d="35.67912"/>
+        </Gate>
+        <Gate>
+        :
+        </Gate>
+      </GateGroup>
+      :
+    </Station>
+  </Point>
+</ResultSet>
+GET /v1/json/geo/station?key=アクセスキーを入力してください&geoPoint=35.6783055555556,139.770441666667,tokyo,1000&addGateGroup=true
+{
+  "ResultSet": {
+    "apiVersion": "1.14.0.0",
+    "engineVersion": "201404_01a",
+    "Point": {
+      "Prefecture": {
+        "code": "13",
+        "Name": "東京都"
+      },
+      "GeoPoint": {
+        "gcs": "tokyo",
+        "lati_d": "35.678082",
+        "longi_d": "139.770443",
+        "lati": "35.40.41.9",
+        "longi": "139.46.13.59"
+      },
+      "Station": {
+        "code": "22828",
+        "Name": "東京",
+        "Yomi": "とうきょう",
+        "Type": "train",
+        "GateGroup": [
+          {
+            "Gate": {
+              "code": "G4663",
+              "Name": "丸の内中央口",
+              "GeoPoint": {
+                "longi": "139.46.8.78",
+                "lati": "35.40.41.52",
+                "longi_d": "139.769107",
+                "gcs": "tokyo",
+                "lati_d": "35.678201"
+              },
+            }
+          },
+          {
+            "Gate": [
+              {
+                "code": "G4581",
+                "Name": "丸の内北口",
+                "GeoPoint": {
+                  "longi": "139.46.9.65",
+                  "lati": "35.40.44.43",
+                  "longi_d": "139.769349",
+                  "gcs": "tokyo",
+                  "lati_d": "35.679009"
+                },
+              },
+              {
+                "code": "G4641",
+                "Name": "丸の内北口(地下鉄側)",
+                "GeoPoint": {
+                  "longi": "139.46.9.22",
+                  "lati": "35.40.44.83",
+                  "longi_d": "139.769229",
+                  "gcs": "tokyo",
+                  "lati_d": "35.67912"
+                },
+              },
+              {
+                :
+              }
+            ]
+          },
+          {
+            :
+          }
+        ]
+      }
+    }
+  }
+}

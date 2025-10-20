@@ -18,14 +18,13 @@ from config import WALK_MINUTES
 from config import ROOM_TYPE
 
 
-def _calculate_min_route(df: pd.DataFrame, to_station: str, output_csv: str) -> pd.DataFrame:
+def calculate_min_route(df: pd.DataFrame, to_station: str) -> pd.DataFrame:
     """
     駅一覧DataFrameから各駅->to_stationまでの最小乗り換え回数・所要時間を取得する。
 
     Args:
         df: 駅一覧DataFrame (line, station, price列を含む)
         to_station: 目的地の駅名
-        output_csv: 結果を保存するCSVファイルパス
 
     Returns:
         pd.DataFrame: 経路情報DataFrame (line, price, from, to, trans, min列)
@@ -48,10 +47,33 @@ def _calculate_min_route(df: pd.DataFrame, to_station: str, output_csv: str) -> 
 
     out_df = pd.DataFrame(
         records, columns=['line', 'price', 'from', 'to', 'trans', 'min'])
-    out_df.to_csv(output_csv, index=False)
-    print(f"最短ルート情報を保存: {output_csv}")
 
     return out_df
+
+
+def get_or_calculate_route(
+    station_coord_price_df: pd.DataFrame,
+    to_station: str,
+    output_path: str
+) -> pd.DataFrame:
+    """
+    経路情報を取得する。
+    既存ファイルがあれば読み込み、なければcalculate_min_routeで計算する。
+
+    Args:
+        station_coord_price_df: 駅座標・価格情報のDataFrame
+        to_station: 目的地駅名
+        output_path: 出力ファイルパス
+
+    Returns:
+        pd.DataFrame: 経路情報DataFrame (line, price, from, to, trans, min列)
+    """
+    if os.path.exists(output_path):
+        print(f"{to_station}: 既存ファイルを読み込みました")
+        return pd.read_csv(output_path)
+    else:
+        print(f"{to_station}: 経路情報を計算中...")
+        return calculate_min_route(station_coord_price_df, to_station)
 
 
 def geocode_station(line: str, station: str) -> tuple:
@@ -176,7 +198,6 @@ def add_geocode_to_station_master(df: pd.DataFrame, output_csv: str) -> pd.DataF
 
     if missing_count == 0:
         print("[2] すべての駅に座標が付与されています")
-        df_merged.to_csv(output_csv, index=False)
         return df_merged
 
     print(f"[2] 座標が欠損している駅: {missing_count}駅")
@@ -208,9 +229,6 @@ def add_geocode_to_station_master(df: pd.DataFrame, output_csv: str) -> pd.DataF
         # API制限対策: 1秒待機
         time.sleep(1)
 
-    # 結果を保存
-    df_merged.to_csv(output_csv, index=False)
-
     # 統計情報を表示
     failed_count = missing_count - success_count
     print(f"[2] 座標取得完了: 成功 {success_count}/{missing_count} "
@@ -218,7 +236,6 @@ def add_geocode_to_station_master(df: pd.DataFrame, output_csv: str) -> pd.DataF
     if failed_count > 0:
         print(f"    失敗した駅が {failed_count}駅 あります")
 
-    print(f"[2] 座標付き駅マスタを保存: {output_csv}")
     return df_merged
 
 
@@ -255,45 +272,6 @@ def make_merged_data(station_df: pd.DataFrame, price_df: pd.DataFrame) -> pd.Dat
     return merged
 
 
-def make_route_data(merged_df: pd.DataFrame) -> dict[str, pd.DataFrame]:
-    """
-    各目的地への経路情報を取得する。
-    既に保存済みデータがある場合は既存ファイルから読み込む。
-    徒歩時間も加算して返す。
-
-    Args:
-        merged_df: マージ済みDataFrame（駅マスタ+家賃）
-
-    Returns:
-        dict[str, pd.DataFrame]: 目的地名をキーとした経路情報DataFrameのdict
-    """
-    data_dir = "../data"
-    route_data_dict = {}
-
-    for to_station in WALK_MINUTES.keys():
-        route_csv = os.path.join(
-            data_dir, "output", "route_info", f"route_info_{to_station}.csv")
-
-        if not os.path.exists(route_csv):
-            print(f"[4] Ekispertで{to_station}への所要時間を取得...")
-            df_route = _calculate_min_route(merged_df, to_station, route_csv)
-        else:
-            print(f"[4] route_info_{to_station}.csv が既に存在:", route_csv)
-            df_route = pd.read_csv(route_csv)
-
-        # 徒歩時間を加算
-        df_route = add_walking_time(
-            df_route, WALK_MINUTES, to_col='to', time_col='min', new_col='train+walk_min')
-        # 保存
-        df_route.to_csv(route_csv, index=False)
-        print(f"[5] {to_station}への徒歩時間を加算しました。")
-
-        # dictに追加
-        route_data_dict[to_station] = df_route
-
-    return route_data_dict
-
-
 def merge_all_route_data(route_dict: dict[str, pd.DataFrame]) -> pd.DataFrame:
     """
     全目的地の経路情報を1つのDataFrameに統合する。
@@ -304,15 +282,7 @@ def merge_all_route_data(route_dict: dict[str, pd.DataFrame]) -> pd.DataFrame:
     Returns:
         pd.DataFrame: 統合されたDataFrame
     """
-    data_dir = "../data"
-    merged_csv_path = os.path.join(
-        data_dir, "output", "merged", f"merged_info_{ROOM_TYPE}.csv")
-
     # dictの全DataFrameを結合
     merged_df = pd.concat(route_dict.values(), axis=0, ignore_index=True)
-
-    # 保存
-    merged_df.to_csv(merged_csv_path, index=False)
-    print("[6] 全経路情報を結合しました:", merged_csv_path)
 
     return merged_df
