@@ -1,87 +1,97 @@
-# StationScraper プロジェクト全体像
+# StationScraper 基礎データパイプライン
 
 > **作成日**: 2025年10月19日
-> **目的**: プロジェクトの現状を正確に把握し、複雑化した構造を整理するための包括的ドキュメント
+> **最終更新**: 2025年10月20日
+> **目的**: 関東エリアの駅データ、家賃相場、経路情報を収集・統合する基礎データパイプラインのドキュメント
 
-## ⚠️ 現状の問題点
+## 概要
 
-このプロジェクトは**同じ目的（駅情報の可視化）に対して3つの異なる実装**が混在しており、以下の問題があります：
+このプロジェクトは、関東エリアの鉄道駅情報を収集し、家賃相場と通勤経路データを統合する**2段階の基礎データパイプライン**です。
 
-- **冗長性**: 類似機能の重複実装
-- **データ依存の複雑さ**: 各システムが異なるデータソースに依存
-- **未完成部分**: 空ファイルや未実装機能が散在
-- **ドキュメント不足**: 実装間の関係性が不明確
+**処理フロー**:
+1. **make_base_data.py**: 駅マスタ、座標、家賃、経路計算の基礎データを生成
+2. **make_frontend_master.py**: オフィスエリアごと（虎ノ門/東京/大塚）のフロントエンド用マスターデータを生成
+
+**データソース**:
+- TravelTowns（駅リスト）
+- SUUMO（家賃相場）
+- Google Maps API（座標）
+- Ekispert API（経路情報）
 
 ---
 
-## プロジェクト構成の全体像
+## データフロー
 
 ```mermaid
-graph TB
-    subgraph "1次データ収集 (src/)"
-        SRC[src/main.py<br/>メインパイプライン]
-        SCRAPER1[TravelTowns<br/>スクレイピング]
-        SCRAPER2[SUUMO<br/>スクレイピング]
-        API1[Ekispert API<br/>経路情報]
-        API2[Google Maps API<br/>座標取得]
+flowchart TD
+    START([開始]) --> STEP1[make_base_data.py]
 
-        SRC --> SCRAPER1
-        SRC --> SCRAPER2
-        SRC --> API1
-        SRC --> API2
+    subgraph "基礎データ準備 (make_base_data.py)"
+        SCRAPE1[TravelTownsスクレイピング]
+        OUT1[station_address.csv]
+
+        GEOCODE[Google Maps API<br/>座標取得]
+        OUT2[station_address_with_coordinates.csv]
+
+        SCRAPE2[SUUMOスクレイピング]
+        OUT3[price_by_station_2k.csv]
+
+        MERGE[駅マスタ+家賃マージ]
+        OUT4[station_coord_price_2k.csv]
+
+        ROUTE[Ekispert API<br/>経路計算ループ]
+        OUT5[calculated_routes_虎ノ門ヒルズ.csv<br/>calculated_routes_虎ノ門.csv<br/>calculated_routes_新橋.csv<br/>...WALK_MINUTES全駅]
+
+        SCRAPE1 --> OUT1
+        OUT1 --> GEOCODE
+        GEOCODE --> OUT2
+        SCRAPE2 --> OUT3
+        OUT2 --> MERGE
+        OUT3 --> MERGE
+        MERGE --> OUT4
+        OUT4 --> ROUTE
+        ROUTE --> OUT5
     end
 
-    subgraph "データストレージ (data/)"
-        D1[station_address.csv<br/>駅マスタ]
-        D2[price_by_station/<br/>家賃データ]
-        D3[station_coord_price/<br/>駅+座標+家賃マージ]
-        D4[calclated_routes/<br/>経路情報]
-        D5[station_address_with_coordinates.csv<br/>座標付き駅マスタ]
+    STEP1 --> STEP2[make_frontend_master.py]
 
-        SCRAPER1 --> D1
-        SCRAPER2 --> D2
-        API2 --> D5
-        D5 --> D3
-        D2 --> D3
-        D3 --> D4
-        API1 --> D4
+    subgraph "フロントエンド用データ生成 (make_frontend_master.py)"
+        LOAD1[station_coord_price_2k.csv<br/>読み込み]
+        LOAD2[calculated_routes_*.csv<br/>読み込み]
+
+        COMBINE[オフィスエリアごとに<br/>データ統合+座標・価格追加]
+
+        OUT6[frontend_master_toranomon_2k.csv<br/>frontend_master_tokyo_2k.csv<br/>frontend_master_otsuka_2k.csv]
+
+        OUT4 -.-> LOAD1
+        OUT5 -.-> LOAD2
+        LOAD1 --> COMBINE
+        LOAD2 --> COMBINE
+        COMBINE --> OUT6
     end
 
-    subgraph "2次データ加工 (nxt_gen/)"
-        NXT[nxt_gen/main.py<br/>データ加工パイプライン]
-        NXT_NORM[路線名正規化<br/>line_mapping.py]
-        NXT_OUT[nxt_gen/data/<br/>stations_complete.csv]
-        NXT_WEB[nxt_gen/webapp/<br/>Flask Webアプリ<br/>No DB版]
+    STEP2 --> END([完了])
 
-        D5 --> NXT
-        D2 --> NXT
-        D4 --> NXT
-        NXT --> NXT_NORM
-        NXT --> NXT_OUT
-        NXT_OUT --> NXT_WEB
-    end
-
-    subgraph "Docker版Webアプリ (mapapp/)"
-        MAP_WEB[mapapp/server.py<br/>Flask + PostgreSQL]
-        MAP_DB[(PostgreSQL<br/>stationsテーブル)]
-        MAP_FRONT[Leaflet.js<br/>地図UI]
-
-        D4 -.手動コピー.-> MAP_WEB
-        MAP_WEB --> MAP_DB
-        MAP_DB --> MAP_FRONT
-    end
-
-    %% スタイル
-    style SRC fill:#ffcdd2
-    style NXT fill:#c5e1a5
-    style MAP_WEB fill:#90caf9
+    style OUT1 fill:#fff9c4
+    style OUT2 fill:#fff9c4
+    style OUT3 fill:#fff9c4
+    style OUT4 fill:#fff9c4
+    style OUT5 fill:#fff9c4
+    style OUT6 fill:#c8e6c9
+    style START fill:#e1f5fe
+    style END fill:#e1f5fe
 ```
+
+**凡例**:
+- 黄色: 中間データファイル
+- 緑色: 最終出力ファイル（フロントエンド用マスター）
+- 青色: 開始/完了
 
 ---
 
-## システム別詳細説明
+## データパイプライン詳細
 
-### 1. **src/** - オリジナル実装（1次データ収集）
+### **src/** - 基礎データパイプライン
 
 #### 役割
 外部ソースから生データを収集し、CSVファイルとして保存する**データパイプラインの起点**。
@@ -90,7 +100,7 @@ graph TB
 
 ```mermaid
 flowchart TD
-    START([python src/main.py]) --> CHECK1{駅マスタ<br/>存在?}
+    START([python src/make_base_data.py]) --> CHECK1{駅マスタ<br/>存在?}
 
     CHECK1 -->|なし| SCRAPE1[TravelTowns<br/>スクレイピング]
     CHECK1 -->|あり| SKIP1[既存使用]
@@ -117,7 +127,7 @@ flowchart TD
     LOOP --> CHECK3{経路CSV<br/>存在?}
     CHECK3 -->|あり| SKIP3[既存ファイル読込<br/>get_or_calculate_route]
     CHECK3 -->|なし| API1[Ekispert API<br/>経路情報取得<br/>calculate_min_route]
-    SKIP3 --> SAVE4["calclated_routes_駅名.csv"]
+    SKIP3 --> SAVE4["calculated_routes_駅名.csv"]
     API1 --> SAVE4
 
     SAVE4 --> CHECK_MORE{他の目的地?}
@@ -135,16 +145,22 @@ flowchart TD
 **現在の実装の特徴**:
 - ステップ4でマージ結果を `station_coord_price_{ROOM_TYPE}.csv` に保存
 - ステップ5で `get_or_calculate_route()` ヘルパー関数を使用し既存ファイルをキャッシュとして活用
-- 出力先は `data/calclated_routes/` ディレクトリ
-- 徒歩時間加算、全データ結合は**未実装**（将来の予定）
+- 出力先は `data/calculated_routes/` ディレクトリ
+- **make_base_data.py は基礎データ準備のみ**。フロントエンド用データは別スクリプト（make_frontend_master.py）で生成
+
+**2段階の処理フロー**:
+1. **make_base_data.py**: 駅マスタ、座標、家賃、経路計算の基礎データを生成
+2. **make_frontend_master.py**: オフィスエリアごと（虎ノ門/東京/大塚）のフロントエンド用マスターデータを生成
 
 #### 主要ファイル
 
 | ファイル | 役割 | 状態 |
 |---------|------|------|
-| `src/main.py` | メインパイプライン（関数化済み）<br/>- 5ステップ処理: 駅マスタ取得→座標付与→家賃取得→マージ→経路計算<br/>- `WALK_MINUTES` の各目的地への経路計算ループ | ✅ 動作 |
+| `src/make_base_data.py` | 基礎データ準備パイプライン（関数化済み）<br/>- 5ステップ処理: 駅マスタ取得→座標付与→家賃取得→マージ→経路計算<br/>- `WALK_MINUTES` の各目的地への経路計算ループ | ✅ 動作 |
+| `src/make_frontend_master.py` | フロントエンド用マスターデータ生成<br/>- オフィスエリアごと（虎ノ門/東京/大塚）にデータ統合<br/>- 座標・価格・徒歩時間を追加<br/>- `frontend_master_{office}_{ROOM_TYPE}.csv` を生成 | ✅ 動作 |
+| `src/temp.py` | バックアップファイル（非推奨）<br/>- make_frontend_master.py への移行元<br/>- 動作確認後に削除予定 | ⚠️ 非推奨 |
 | `src/functions.py` | パイプライン関数群<br/>- `make_station_master()`: 駅マスタ取得<br/>- `add_geocode_to_station_master()`: 座標付与（既存データ活用）<br/>- `make_rent_data()`: 家賃データ取得<br/>- `make_merged_data()`: マージ処理（CSV保存あり）<br/>- `calculate_min_route()`: Ekispert API で経路計算<br/>- `get_or_calculate_route()`: キャッシュ機能付き経路取得ヘルパー | ✅ 動作 |
-| `src/config.py` | 設定ファイル<br/>- `EKISPERT_KEY`, `GOOGLE_MAPS_KEY`: API キー<br/>- `ROOM_TYPE`: 部屋タイプ (2k)<br/>- `WALK_MINUTES`: 目的地駅と徒歩時間のマッピング | ✅ 動作 |
+| `src/config.py` | 設定ファイル<br/>- `EKISPERT_KEY`, `GOOGLE_MAPS_KEY`: API キー<br/>- `ROOM_TYPE`: 部屋タイプ (2k)<br/>- `WALK_MINUTES`: 目的地駅と徒歩時間のマッピング<br/>- `TO_TORANOMON_LIST`, `TO_TOKYO_LIST`, `TO_OTSUKA_LIST`: オフィスエリアごとの対象駅リスト | ✅ 動作 |
 | `src/scrapers/traveltowns_scraper.py` | TravelTownsスクレイピング | ✅ 動作 |
 | `src/scrapers/suumo_scraper.py` | SUUMOスクレイピング | ✅ 動作 |
 | `src/apis/ekispert.py` | Ekispert API呼び出し<br/>- 駅名正規化フォールバック機能追加済み | ✅ 動作 |
@@ -168,16 +184,20 @@ data/
 │   ├── station_coord_price_one_room.csv         # 駅+座標+家賃マージデータ（ワンルーム）
 │   ├── station_coord_price_1k.csv               # 駅+座標+家賃マージデータ（1K）
 │   └── station_coord_price_2k.csv               # 駅+座標+家賃マージデータ（2K）
-└── calclated_routes/
-    ├── calclated_routes_虎ノ門ヒルズ.csv
-    ├── calclated_routes_虎ノ門.csv
-    ├── calclated_routes_新橋.csv
-    ├── calclated_routes_霞ケ関.csv
-    ├── calclated_routes_国会議事堂前.csv
-    ├── calclated_routes_溜池山王.csv
-    ├── calclated_routes_桜田門.csv
-    ├── calclated_routes_内幸町.csv
-    └── ...（WALK_MINUTESの全目的地）          # 各目的地への経路情報
+├── calculated_routes/
+│   ├── calculated_routes_虎ノ門ヒルズ.csv
+│   ├── calculated_routes_虎ノ門.csv
+│   ├── calculated_routes_新橋.csv
+│   ├── calculated_routes_霞ケ関.csv
+│   ├── calculated_routes_国会議事堂前.csv
+│   ├── calculated_routes_溜池山王.csv
+│   ├── calculated_routes_桜田門.csv
+│   ├── calculated_routes_内幸町.csv
+│   └── ...（WALK_MINUTESの全目的地）          # 各目的地への経路情報
+└── frontend_master/
+    ├── frontend_master_toranomon_2k.csv        # 虎ノ門エリア向けマスターデータ
+    ├── frontend_master_tokyo_2k.csv            # 東京エリア向けマスターデータ
+    └── frontend_master_otsuka_2k.csv           # 大塚エリア向けマスターデータ
 ```
 
 **注**: `data/output/route_info/` と `data/output/merged/` はレガシーディレクトリ（現在は生成されていない）
@@ -206,7 +226,7 @@ data/
 
 **保存先**: `data/station_master/station_address_with_coordinates.csv`
 
-**生成**: `src/main.py:add_geocode_to_station_master()` (Google Maps API経由、既存データ活用)
+**生成**: `src/make_base_data.py:add_geocode_to_station_master()` (Google Maps API経由、既存データ活用)
 
 **特徴**:
 - 既存の座標データがある場合は読み込んで活用（API使用量を節約）
@@ -239,14 +259,14 @@ SUUMOからスクレイピングした駅ごとのワンルーム家賃相場（
 
 **保存先**: `data/station_coord_price/station_coord_price_{ROOM_TYPE}.csv`
 
-**生成**: `src/main.py` ステップ4（`make_merged_data()` → CSV保存）
+**生成**: `src/make_base_data.py` ステップ4（`make_merged_data()` → CSV保存）
 
 **特徴**:
 - 路線名正規化によりマージ率向上（44.4% → 78.1%）
 - 座標がない駅、家賃データがない駅も含む（欠損値として保持）
 - 経路計算の入力データとして使用
 
-##### 5. calclated_routes_{駅名}.csv
+##### 5. calculated_routes_{駅名}.csv
 各駅から特定の目的地駅への最適経路情報
 
 | カラム名 | データ型 | 説明 |
@@ -258,9 +278,9 @@ SUUMOからスクレイピングした駅ごとのワンルーム家賃相場（
 | `trans` | INT | 乗換回数 |
 | `min` | INT | 所要時間（分）電車のみ |
 
-**保存先**: `data/calclated_routes/calclated_routes_{目的地駅名}.csv`
+**保存先**: `data/calculated_routes/calculated_routes_{目的地駅名}.csv`
 
-**生成**: `src/main.py` ステップ5（`get_or_calculate_route()` → CSV保存）
+**生成**: `src/make_base_data.py` ステップ5（`get_or_calculate_route()` → CSV保存）
 
 **目的地**: `WALK_MINUTES` に定義された全駅（虎ノ門ヒルズ、内幸町、大塚など）
 
@@ -268,6 +288,43 @@ SUUMOからスクレイピングした駅ごとのワンルーム家賃相場（
 - 既存ファイルがあれば読み込み（API呼び出しをスキップ）
 - priceがNaNの駅はスキップされる
 - 徒歩時間は**含まれていない**（将来実装予定）
+
+##### 6. frontend_master_{office}_{room_type}.csv
+オフィスエリアごとの最適化されたフロントエンド用マスターデータ
+
+| カラム名 | データ型 | 説明 |
+|---------|---------|------|
+| `line` | TEXT | 路線名 |
+| `from` | TEXT | 出発駅 |
+| `to` | TEXT | 目的駅 |
+| `trans` | INT | 乗換回数 |
+| `min` | INT | 所要時間（分）電車のみ |
+| `lat` | FLOAT | 出発駅の緯度 |
+| `lng` | FLOAT | 出発駅の経度 |
+| `price` | FLOAT | 家賃相場（万円） |
+| `walk_min` | INT | 目的駅からの徒歩時間（分） |
+
+**保存先**: `data/frontend_master/frontend_master_{office}_{ROOM_TYPE}.csv`
+
+**生成**: `src/make_frontend_master.py`
+
+**オフィスエリア**:
+- `toranomon`: 虎ノ門エリア（虎ノ門ヒルズ、虎ノ門、新橋など8駅）
+- `tokyo`: 東京エリア（東京、日本橋、大手町など7駅）
+- `otsuka`: 大塚エリア（大塚駅のみ）
+
+**特徴**:
+- オフィスエリアごとに対象駅を絞り込んだデータ
+- 地図可視化アプリで使用するための最終データセット
+- 座標・価格・徒歩時間が統合済み
+- Webアプリ（mapapp/）の入力データとして使用
+
+**データ例**:
+```csv
+line,from,to,trans,min,lat,lng,price,walk_min
+JR中央・総武線各駅停車,三鷹,虎ノ門ヒルズ,1,58,35.7027156,139.5610291,11.5,4
+JR中央・総武線各駅停車,吉祥寺,虎ノ門ヒルズ,1,55,35.7031485,139.5798087,12.0,4
+```
 
 ---
 
@@ -279,7 +336,7 @@ SUUMOからスクレイピングした駅ごとのワンルーム家賃相場（
 
 **保存先**: `data/output/route_info/route_info_{目的地駅名}.csv`
 
-**現状**: 現在の `src/main.py` では生成されていません。`calclated_routes/` に置き換えられました。
+**現状**: 現在の `src/make_base_data.py` では生成されていません。`calculated_routes/` に置き換えられました。
 
 **過去の用途**: 各駅から目的地への経路情報（徒歩時間加算済み）
 
@@ -287,7 +344,7 @@ SUUMOからスクレイピングした駅ごとのワンルーム家賃相場（
 
 **保存先**: `data/output/merged/merged_info_one_room.csv`
 
-**現状**: 現在の `src/main.py` では生成されていません。
+**現状**: 現在の `src/make_base_data.py` では生成されていません。
 
 **過去の用途**: 全目的地の経路情報を統合したデータ
 
@@ -297,17 +354,13 @@ SUUMOからスクレイピングした駅ごとのワンルーム家賃相場（
 
 以下の機能は現在実装されていませんが、実装予定です：
 
-1. **徒歩時間を考慮した通勤時間DataFrame作成**
-   - `calclated_routes_{駅名}.csv` に `WALK_MINUTES` の徒歩時間を加算
+1. **徒歩時間を考慮した通勤時間DataFrame作成（全目的地統合版）**
+   - 全目的地の `calculated_routes_{駅名}.csv` を統合
    - 新カラム `total_commute_time` = `min` + `walk_min`
 
 2. **複数条件での絞り込み処理**
    - 家賃上限、通勤時間上限、乗換回数上限などのフィルタリング
    - フィルタリング済みデータを別ファイルに保存
-
-3. **フロントエンド用マスターCSV作成**
-   - 地図可視化アプリ用の最終データセット生成
-   - 必要なカラムのみを含むシンプルなCSV
 
 #### 改善済み
 - ✓ 空ファイル（analysis.py、visualization.py）を削除（2025年10月19日）
@@ -315,325 +368,24 @@ SUUMOからスクレイピングした駅ごとのワンルーム家賃相場（
 - ✓ ジオコーディング処理をパイプラインに統合、既存データ活用により効率化（2025年10月19日）
 - ✓ 路線名の表記揺れを完全解決（44.4% → 78.1%）、正規化ロジックを実装（2025年10月19日）
 - ✓ 中間CSV廃止、make_merged_data()をメモリ内処理に簡素化（2025年10月19日）
-- ✓ main.pyを temp.py ベースに書き換え、calclated_routes/ に出力（2025年10月20日）
+- ✓ main.pyを temp.py ベースに書き換え、calculated_routes/ に出力（2025年10月20日）
 - ✓ get_or_calculate_route() ヘルパー関数追加でキャッシュ対応（2025年10月20日）
 - ✓ station_coord_price_{ROOM_TYPE}.csv をパイプラインで生成・保存（2025年10月20日）
+- ✓ **フロントエンド用マスターCSV作成**（2025年10月20日）
+  - `make_frontend_master.py` を作成
+  - オフィスエリアごと（虎ノ門/東京/大塚）のマスターデータを生成
+  - 座標・価格・徒歩時間を統合したWebアプリ用最終データセット
 
 ---
 
-### 2. **nxt_gen/** - リファクタリング版（2次データ加工）
-
-#### 役割
-src/で生成された1次データを読み込み、路線名正規化やフィルタリングを行う**データ加工システム**。
-
-#### 処理フロー
-
-```mermaid
-flowchart TD
-    START([python nxt_gen/main.py]) --> LOAD1[駅マスタ読込<br/>station_address_with_coordinates.csv]
-    LOAD1 --> LOAD2[家賃データ読込<br/>price_by_station_2k.csv]
-
-    LOAD2 --> NORM[路線名正規化<br/>line_mapping.py]
-    NORM --> MERGE[駅マスタ+家賃<br/>マージ]
-
-    MERGE --> LOOP_START[目的地ごとに処理<br/>WALK_MINUTES全駅]
-
-    LOOP_START --> CHECK_EXIST{既存経路データ<br/>あり?}
-    CHECK_EXIST -->|あり| LOAD_EXIST["既存データ読込<br/>calclated_routes_駅名.csv"]
-    CHECK_EXIST -->|なし| NO_EXIST[既存データなし]
-
-    LOAD_EXIST --> CHECK_MISSING{不足駅<br/>あり?}
-    NO_EXIST --> CHECK_MISSING
-
-    CHECK_MISSING -->|あり| API_COLLECT[Ekispert API呼び出し<br/>collect_route_info]
-    CHECK_MISSING -->|なし| SKIP_API[追加収集不要]
-
-    API_COLLECT --> SAVE_ROUTE["calclated_routes_駅名.csv<br/>に保存"]
-    SKIP_API --> COMBINE
-    SAVE_ROUTE --> COMBINE[既存+新規を統合]
-
-    COMBINE --> CHECK_MORE{他の目的地?}
-    CHECK_MORE -->|あり| LOOP_START
-    CHECK_MORE -->|なし| PREPARE[最終データセット作成]
-
-    PREPARE --> FILTER[フィルタリング<br/>家賃≤10万<br/>時間≤60分<br/>乗換≤2回]
-
-    FILTER --> SAVE1[stations_complete.csv]
-    SAVE1 --> SAVE2[filtered_stations_complete.csv]
-    SAVE2 --> END([完了])
-
-    style START fill:#e1f5fe
-    style API_COLLECT fill:#e3f2fd
-    style END fill:#c8e6c9
-```
-
-#### 重要な仕様
-
-**既存データの活用とAPI呼び出し**
-
-- `route_collector.py`の`collect_route_info()`関数でEkispert API呼び出しを実行
-- 既存の`calclated_routes_*.csv`（src/が生成）がある場合は読み込んで活用
-- 不足駅がある場合のみAPI呼び出しで追加収集（API使用量を節約）
-- すべての駅の経路情報を取得できるまで処理を継続
-
-#### 主要ファイル
-
-| ファイル | 役割 |
-|---------|------|
-| `nxt_gen/main.py` | メインパイプライン |
-| `nxt_gen/config.py` | 設定ファイル（目的地、フィルタ条件）<br/>※ `PRICE_DATA_PATH` 削除、`PRICE_ORIGINAL_PATH` に変更 |
-| `nxt_gen/data_loader.py` | データ読み込み・保存<br/>※ `load_price_data()` を改修、オンデマンドでマージ生成 |
-| `nxt_gen/line_mapping.py` | 路線名正規化マッピング |
-| `nxt_gen/route_collector.py` | 経路情報収集（Ekispert API呼び出し） |
-| `nxt_gen/data_processor.py` | データ処理・フィルタリング |
-| `nxt_gen/webapp/app.py` | Flask Webアプリ（DB不要） |
-| `nxt_gen/webapp/templates/index.html` | 地図表示画面 |
-
-#### 生成されるデータ
-
-```
-nxt_gen/data/
-├── stations_complete.csv           # 全データ
-└── filtered_stations_complete.csv  # フィルタ済み
-```
-
-#### CSVファイル構造詳細
-
-##### 1. stations_complete.csv
-駅情報、座標、家賃、経路情報を統合した完全データセット
-
-| カラム名 | データ型 | 説明 |
-|---------|---------|------|
-| `line` | TEXT | 路線名（正規化済み） |
-| `station` | TEXT | 駅名 |
-| `lat` | FLOAT | 緯度 |
-| `lng` | FLOAT | 経度 |
-| `price` | FLOAT | 家賃相場（万円）、欠損値あり |
-| `to_station` | TEXT | 目的駅（虎ノ門ヒルズ、虎ノ門など） |
-| `trans` | INT | 乗換回数（推定値） |
-| `train_min` | INT | 電車の所要時間（分、推定値） |
-| `walk_min` | INT | 駅からの徒歩時間（分） |
-| `total_min` | INT | 合計所要時間（train_min + walk_min） |
-
-**生成**: `nxt_gen/data_loader.py:save_data()`
-
-**データソース**:
-- 座標: `data/station_master/station_address_with_coordinates.csv`
-- 家賃: `data/price_by_station/price_by_station_one_room.csv` (オンデマンドで正規化・マージ)
-- 経路: `data/output/route_info/route_info_*.csv`（既存データまたはAPI呼び出しで取得）
-
-**データ例**:
-```csv
-line,station,lat,lng,price,to_station,trans,train_min,walk_min,total_min
-JR上越線,高崎,36.3228267,139.0126623,,虎ノ門ヒルズ,2,97,4,101
-JR上越線,高崎問屋町,36.34606,139.0171158,,虎ノ門ヒルズ,2,134,4,138
-```
-
-##### 2. filtered_stations_complete.csv
-stations_complete.csvをフィルタリングしたデータ
-
-**構造**: stations_complete.csvと同じ
-
-**フィルタ条件**（config.pyで設定可能）:
-- 家賃: <= 10万円（MAX_PRICE_DEFAULT）
-- 所要時間: <= 60分（MAX_TIME_DEFAULT）
-- 乗換回数: <= 2回（MAX_TRANS_DEFAULT）
-
-**生成**: `nxt_gen/data_processor.py:filter_stations()`
-
-#### 改善点
-- ✓ KISS原則に従ったシンプル設計
-- ✓ 路線名の表記揺れを解決
-- ✓ Docker不要（pip + pythonのみ）
-- ✓ PostgreSQL不要（CSV直接利用）
-- ✓ 中間CSV廃止、オンデマンドでデータ生成（2025年10月19日）
-
-#### 問題点
-- ✗ src/の1次データに依存（独立して動作しない）
-- ✗ `line_mapping.py` が重複（`src/pipeline/data_cleaning.py` と同じ機能）
-
----
-
-### 3. **mapapp/** - Docker版Webアプリ
-
-#### 役割
-src/で生成されたデータをPostgreSQLに格納し、Webブラウザで可視化する**本格的なWebアプリケーション**。
-
-#### アーキテクチャ
-
-```mermaid
-graph LR
-    subgraph "Docker環境"
-        DB[(PostgreSQL<br/>Port: 5432<br/>stationsテーブル)]
-        FLASK[Flask Server<br/>Port: 5000<br/>server.py]
-        INIT[init_db.py<br/>DB初期化]
-
-        INIT -->|データ投入| DB
-        DB <-->|SQL| FLASK
-    end
-
-    CSV[stations.csv<br/>※手動配置] -.->|読込| INIT
-
-    BROWSER[Webブラウザ<br/>localhost:5000] <-->|HTTP/JSON| FLASK
-
-    LEAFLET[Leaflet.js<br/>地図UI] -.->|表示| BROWSER
-
-    style DB fill:#90caf9
-    style FLASK fill:#a5d6a7
-    style BROWSER fill:#ce93d8
-```
-
-#### 主要ファイル
-
-| ファイル | 役割 |
-|---------|------|
-| `mapapp/docker-compose.yml` | Docker構成定義 |
-| `mapapp/server.py` | Flaskサーバー（API提供） |
-| `mapapp/init_db.py` | PostgreSQL初期化スクリプト |
-| `mapapp/static/index.html` | フロントエンド（地図表示） |
-| `mapapp/stations.csv` | 駅データ（**手動で配置が必要**） |
-
-#### データベーススキーマ
-
-```sql
-CREATE TABLE stations (
-    id SERIAL PRIMARY KEY,
-    line TEXT,              -- 路線名
-    station TEXT,           -- 駅名
-    lat DOUBLE PRECISION,   -- 緯度
-    lng DOUBLE PRECISION,   -- 経度
-    price DOUBLE PRECISION, -- 家賃（万円）
-    commute_time INT        -- 通勤時間（分）
-);
-```
-
-#### API仕様
-
-**GET** `/api/stations`
-
-クエリパラメータ:
-- `price_min`: 最低家賃（万円）
-- `price_max`: 最高家賃（万円）
-- `time_min`: 最短通勤時間（分）
-- `time_max`: 最長通勤時間（分）
-
-レスポンス例:
-```json
-[
-  {
-    "line": "JR山手線",
-    "station": "東京",
-    "lat": 35.681236,
-    "lng": 139.767125,
-    "price": 15.5,
-    "commute_time": 20
-  }
-]
-```
-
-#### 起動方法
-
-```bash
-cd mapapp
-docker-compose up
-```
-
-http://localhost:5000 でアクセス
-
-#### 改善点
-- ✓ PostgreSQL使用で本格的なデータ管理
-- ✓ Docker Composeで環境構築が容易
-- ✓ インタラクティブなフィルタリング機能
-
-#### 問題点
-- ✗ `stations.csv`を手動配置する必要がある
-- ✗ src/のデータに依存
-- ✗ nxt_gen/webappと機能が重複
-
----
-
-## データフロー全体図
-
-```mermaid
-flowchart TB
-    subgraph "外部ソース"
-        WEB1[TravelTowns<br/>traveltowns.jp]
-        WEB2[SUUMO<br/>suumo.jp]
-        API1[Ekispert API<br/>api.ekispert.jp]
-        API2[Google Maps API<br/>maps.googleapis.com]
-    end
-
-    subgraph "1次データ収集 (src/)"
-        SRC_MAIN[src/main.py]
-    end
-
-    subgraph "1次データ (data/)"
-        CSV1[station_address.csv<br/>2,496駅]
-        CSV2[price_by_station_2k.csv<br/>2,167駅]
-        CSV3[station_coord_price_2k.csv<br/>駅+座標+家賃マージ]
-        CSV4[calclated_routes_*.csv<br/>WALK_MINUTES全駅分]
-        CSV5[station_address_with_coordinates.csv<br/>2,496駅（全駅座標あり）]
-    end
-
-    subgraph "2次データ加工 (nxt_gen/)"
-        NXT_MAIN[nxt_gen/main.py]
-        NXT_DATA[stations_complete.csv<br/>filtered_stations_complete.csv]
-        NXT_APP[nxt_gen/webapp/app.py<br/>Flask + CSV]
-    end
-
-    subgraph "Webアプリ (mapapp/)"
-        MAP_INIT[init_db.py]
-        MAP_DB[(PostgreSQL)]
-        MAP_APP[server.py<br/>Flask + DB]
-        MAP_FRONT[index.html<br/>Leaflet.js]
-    end
-
-    WEB1 -->|スクレイピング| SRC_MAIN
-    WEB2 -->|スクレイピング| SRC_MAIN
-    API1 -->|API呼び出し| SRC_MAIN
-    API2 -->|API呼び出し| SRC_MAIN
-
-    SRC_MAIN --> CSV1
-    SRC_MAIN --> CSV2
-    SRC_MAIN --> CSV5
-    CSV5 --> CSV3
-    CSV2 --> CSV3
-    SRC_MAIN --> CSV3
-    CSV3 --> CSV4
-    SRC_MAIN --> CSV4
-
-    CSV5 --> NXT_MAIN
-    CSV2 --> NXT_MAIN
-    CSV4 --> NXT_MAIN
-
-    NXT_MAIN --> NXT_DATA
-    NXT_DATA --> NXT_APP
-
-    CSV4 -.手動コピー.-> MAP_INIT
-    MAP_INIT --> MAP_DB
-    MAP_DB --> MAP_APP
-    MAP_APP --> MAP_FRONT
-
-    style WEB1 fill:#ffebee
-    style WEB2 fill:#ffebee
-    style API1 fill:#e3f2fd
-    style API2 fill:#e3f2fd
-    style SRC_MAIN fill:#ffcdd2
-    style NXT_MAIN fill:#c5e1a5
-    style MAP_APP fill:#90caf9
-```
-
----
-
-## ディレクトリ構造詳細
+## ディレクトリ構造
 
 ```
 stationscraper/
 ├── .env                                    # 環境変数（APIキー）
 ├── .gitignore
 ├── CLAUDE.md                               # Claude Code向けプロジェクト説明
-├── README.md                               # プロジェクト概要（既存）
-├── FIX_LINE_NAME_MAPPING.md                # 路線名マッピング問題の解決ガイド
+├── README.md                               # プロジェクト概要
 ├── PROJECT_OVERVIEW.md                     # 本ドキュメント
 │
 ├── data/                                   # データストレージ
@@ -648,66 +400,41 @@ stationscraper/
 │   │   ├── station_coord_price_one_room.csv # 駅+座標+家賃マージ（ワンルーム）
 │   │   ├── station_coord_price_1k.csv      # 駅+座標+家賃マージ（1K）
 │   │   └── station_coord_price_2k.csv      # 駅+座標+家賃マージ（2K）
-│   ├── calclated_routes/                   # 各目的地への経路情報（現在）
-│   │   ├── calclated_routes_虎ノ門ヒルズ.csv
-│   │   ├── calclated_routes_虎ノ門.csv
-│   │   ├── calclated_routes_新橋.csv
-│   │   ├── calclated_routes_内幸町.csv
-│   │   ├── calclated_routes_大塚.csv
+│   ├── calculated_routes/                   # 各目的地への経路情報
+│   │   ├── calculated_routes_虎ノ門ヒルズ.csv
+│   │   ├── calculated_routes_虎ノ門.csv
+│   │   ├── calculated_routes_新橋.csv
+│   │   ├── calculated_routes_内幸町.csv
+│   │   ├── calculated_routes_大塚.csv
 │   │   └── ...（WALK_MINUTES全駅）
-│   └── output/                             # レガシーディレクトリ（現在は未使用）
-│       ├── route_info/                     # ⚠️ レガシー（現在生成されない）
-│       └── merged/                         # ⚠️ レガシー（現在生成されない）
+│   └── frontend_master/                     # オフィスエリア別マスターデータ
+│       ├── frontend_master_toranomon_2k.csv  # 虎ノ門エリア向け
+│       ├── frontend_master_tokyo_2k.csv      # 東京エリア向け
+│       └── frontend_master_otsuka_2k.csv     # 大塚エリア向け
 │
-├── src/                                    # 1次データ収集（オリジナル実装）
-│   ├── main.py                             # メインパイプライン
-│   ├── config.py                           # 設定ファイル
-│   ├── scrapers/
-│   │   ├── traveltowns_scraper.py          # TravelTownsスクレイピング
-│   │   └── suumo_scraper.py                # SUUMOスクレイピング
-│   ├── apis/
-│   │   ├── ekispert.py                     # Ekispert API
-│   │   └── google_maps.py                  # Google Maps API
-│   └── pipeline/
-│       ├── data_cleaning.py                # データクリーニング
-│       ├── analysis.py                     # フィルタリング
-│       └── visualization.py                # 散布図描画
-│
-├── nxt_gen/                                # 2次データ加工（リファクタリング版）
-│   ├── README.md                           # nxt_gen説明
-│   ├── main.py                             # メインパイプライン
-│   ├── config.py                           # 設定ファイル
-│   ├── data_loader.py                      # データ読み込み・保存
-│   ├── line_mapping.py                     # 路線名正規化
-│   ├── route_collector.py                  # 経路情報収集（未使用）
-│   ├── route_collector_backup.py           # バックアップ
-│   ├── data_processor.py                   # データ処理
-│   ├── data/                               # 出力データ
-│   │   ├── stations_complete.csv
-│   │   └── filtered_stations_complete.csv
-│   └── webapp/                             # Flask Webアプリ（DB不要）
-│       ├── app.py                          # Flaskサーバー
-│       ├── static/
-│       └── templates/
-│           └── index.html                  # 地図表示画面
-│
-├── mapapp/                                 # Docker版Webアプリ
-│   ├── docker-compose.yml                  # Docker構成
-│   ├── Dockerfile
-│   ├── requirements.txt
-│   ├── init_db.py                          # DB初期化
-│   ├── server.py                           # Flaskサーバー
-│   ├── static/
-│   │   ├── index.html                      # フロントエンド
-│   │   └── main.js
-│   └── stations.csv                        # 駅データ（要手動配置）
+└── src/                                    # 基礎データパイプライン
+    ├── make_base_data.py                   # 基礎データ準備
+    ├── make_frontend_master.py             # フロントエンド用データ生成
+    ├── temp.py                             # バックアップ（非推奨・削除予定）
+    ├── functions.py                        # パイプライン関数群
+    ├── config.py                           # 設定ファイル
+    ├── scrapers/
+    │   ├── traveltowns_scraper.py          # TravelTownsスクレイピング
+    │   └── suumo_scraper.py                # SUUMOスクレイピング
+    ├── apis/
+    │   ├── ekispert.py                     # Ekispert API
+    │   └── google_maps.py                  # Google Maps API
+    └── pipeline/
+        ├── data_cleaning.py                # データクリーニング
+        ├── analysis.py                     # フィルタリング
+        └── visualization.py                # 散布図描画
 ```
 
 ---
 
-## 実行方法まとめ
+## 実行方法
 
-### 1次データ収集（src/）
+### 環境セットアップ
 
 ```bash
 # 環境変数設定（.envファイル作成）
@@ -717,161 +444,33 @@ GOOGLE_MAPS_KEY=your_key_here
 # 依存パッケージインストール
 pip install -r requirements.txt
 pip install python-dotenv  # requirements.txtに未記載
-
-# メインパイプライン実行
-cd src
-python main.py
 ```
 
-**注意**: 初回実行時はスクレイピング・API呼び出しで数時間かかる可能性あり。
+### パイプライン実行
 
-### 2次データ加工（nxt_gen/）
-
-```bash
-cd nxt_gen
-python main.py
-
-# Webアプリ起動
-cd webapp
-python app.py
-# http://localhost:5000
-```
-
-### Docker版Webアプリ（mapapp/）
-
-```bash
-cd mapapp
-
-# stations.csvを配置（手動）
-# cp ../data/output/merged/merged_info_one_room.csv stations.csv
-
-# Docker起動
-docker-compose up
-# http://localhost:5000
-```
-
----
-
-## 問題点と改善提案
-
-### 現状の問題点
-
-#### 1. **冗長性**
-- 同じ目的に対して3つの実装（src/、nxt_gen/、mapapp/）が存在
-- nxt_gen/webappとmapappのWebアプリ機能が重複
-- データファイルの重複
-
-#### 2. **依存関係の複雑さ**
-- nxt_gen/はsrc/の出力に依存
-- mapapp/もsrc/の出力に依存
-- 独立して動作するシステムがない
-
-#### 3. **未完成部分**
-- src/config.pyの一部定数未定義
-
-#### 4. **データ品質**
-- 路線名の表記揺れで44%の駅しかマージできていない（nxt_gen/では解決済み）
-
-#### 5. **ドキュメント不足**
-- 各実装間の関係性が不明確
-- データの依存関係が文書化されていない
-- 実行順序が明確でない
-
-### 改善提案
-
-#### 短期的改善
-
-1. ~~**空ファイルの削除**~~ ✅ **完了（2025年10月19日）**
-   - ✓ src/apis/analysis.py を削除
-   - ✓ src/apis/visualization.py を削除
-
-2. **設定ファイルの修正**
-   - src/config.pyに不足している定数を追加
-   - requirements.txtにpython-dotenvを追加
-
-3. ~~**データパイプラインの整備**~~ ✅ **完了（2025年10月19日）**
-   - ✓ 実行順序が関数名から明確になった
-   - ✓ 各ステップが独立した関数として明示的に定義された
-   - ✓ 未使用のテストファイル（temp*.py）を削除
-
-#### 中期的改善
-
-1. **実装の統合**
-   - nxt_gen/webappまたはmapappのどちらかに統一
-   - 不要な実装を削除
-
-2. **データ品質の向上**
-   - src/でも路線名マッピングを実装（現在はnxt_gen/のみ対応）
-
-#### 長期的改善
-
-1. **システムの再設計**
-   - 1次データ収集、2次データ加工、可視化を明確に分離
-   - 各コンポーネントを独立して動作可能にする
-
-2. **データベース化**
-   - CSVファイルではなくPostgreSQLで一元管理
-   - データのバージョン管理
-
-3. **テストの追加**
-   - スクレイピング処理の単体テスト
-   - データ加工処理の統合テスト
-
----
-
-## まとめ
-
-このプロジェクトは**段階的に機能を追加してきた結果、3つの実装が並存**している状態です。
-
-### 各実装の特徴
-
-| 実装 | 役割 | 独立性 | 推奨度 |
-|-----|------|--------|--------|
-| **src/** | 1次データ収集 | ✓ 独立 | ⭐⭐⭐ 必須 |
-| **nxt_gen/** | 2次データ加工 | ✗ src/に依存 | ⭐⭐ 便利 |
-| **mapapp/** | Docker版Web可視化 | ✗ src/に依存 | ⭐⭐ 便利 |
-
-### 推奨される使い方
-
-**最小構成**（データ収集のみ）:
 ```bash
 cd src
-python main.py
+
+# 1. 基礎データ準備（駅マスタ、座標、家賃、経路計算）
+python make_base_data.py
+
+# 2. フロントエンド用データ生成（オフィスエリア別）
+python make_frontend_master.py
 ```
 
-**可視化まで含む**（nxt_gen使用）:
-```bash
-# 1. データ収集
-cd src
-python main.py
+**注意**:
+- 初回実行時はスクレイピング・API呼び出しで数時間かかる可能性あり
+- `make_frontend_master.py` は `make_base_data.py` の実行後に実行すること
+- 既存ファイルがある場合はスキップされるため、2回目以降は高速
 
-# 2. データ加工・可視化
-cd ../nxt_gen
-python main.py
-cd webapp
-python app.py
-```
-
-**本格運用**（Docker使用）:
-```bash
-# 1. データ収集
-cd src
-python main.py
-
-# 2. Webアプリ起動
-cd ../mapapp
-# stations.csvを配置
-docker-compose up
-```
 
 ---
 
 ## 関連ドキュメント
 
 - [CLAUDE.md](./CLAUDE.md) - Claude Code向けプロジェクト説明
-- [README.md](./README.md) - プロジェクト概要（Mermaid図含む）
-- [FIX_LINE_NAME_MAPPING.md](./FIX_LINE_NAME_MAPPING.md) - 路線名マッピング問題の解決ガイド
-- [nxt_gen/README.md](./nxt_gen/README.md) - nxt_gen説明
+- [README.md](./README.md) - プロジェクト概要
+- [AGENTS.md](./AGENTS.md) - Repository Guidelines（開発原則）
 
 ---
 
@@ -915,13 +514,13 @@ docker-compose up
 ### 2025年10月19日（リファクタリング第1弾）
 - **nominatim削除**: 未使用のnominatimディレクトリとドキュメント記載を削除（Google Maps API使用のため不要）
 - **line_url.csv削除**: 過去の実装で使われていた中間ファイルを削除（現在は`scrape_traveltowns_kanto()`関数に統合済み）
-- **src/main.pyリファクタリング**: メインパイプラインを5つのヘルパー関数（`make_*()`）に分割し可読性を向上
+- **src/make_base_data.pyリファクタリング**: メインパイプラインを5つのヘルパー関数（`make_*()`）に分割し可読性を向上
 
 ### 2025年10月20日（main.py 実装更新）
 - **main.py を temp.py ベースに書き換え**:
   - 処理フローを明確化: 駅マスタ取得→座標付与→家賃取得→マージ→経路計算の5ステップ
   - `make_route_data()` 削除 → `calculate_min_route()` + ループ処理に変更
-  - 出力先を `data/calclated_routes/calclated_routes_{駅名}.csv` に変更（レガシーの `route_info/` から移行）
+  - 出力先を `data/calculated_routes/calculated_routes_{駅名}.csv` に変更（レガシーの `route_info/` から移行）
   - `station_coord_price_{ROOM_TYPE}.csv` の保存処理を追加（ステップ4）
 - **get_or_calculate_route() ヘルパー関数追加**（`src/functions.py`）:
   - 既存ファイルがあれば読み込み、なければ計算する仕組み
@@ -932,6 +531,39 @@ docker-compose up
   - 複数条件での絞り込み処理（予定）
   - フロントエンド用マスターCSV作成（予定）
 - **ドキュメント更新**: PROJECT_OVERVIEW.md を現在の実装状況に正確に反映
+
+### 2025年10月20日（パイプライン責任分離とリネーミング）
+- **make_frontend_master.py 作成**:
+  - オフィスエリアごとのフロントエンド用マスターデータ生成機能を分離
+  - 虎ノ門、東京、大塚の3つのオフィスエリア向けにデータを統合
+  - 座標・価格・徒歩時間を追加した最終データセットを生成
+  - `data/frontend_master/frontend_master_{office}_{ROOM_TYPE}.csv` を出力
+- **main.py → make_base_data.py リネーム**:
+  - 汎用的な基礎データ準備スクリプトであることを明確化
+  - make_frontend_master.py と命名規則を統一（make_xxx）
+  - 処理フローを2段階に分離（基礎データ準備 → フロントエンドデータ生成）
+- **temp.py の位置付け変更**:
+  - make_frontend_master.py への移行元として残置
+  - ファイル冒頭に非推奨・削除予定を明記
+- **ドキュメント更新**:
+  - CLAUDE.md、AGENTS.md、PROJECT_OVERVIEW.md、README.md を更新
+  - make_frontend_master.py の説明とデータ構造を追加
+  - 実行方法を2段階フローに変更
+
+### 2025年10月20日（ドキュメントスコープの明確化）
+- **PROJECT_OVERVIEW.md のスコープ変更**:
+  - 基礎データパイプライン（src/）のみに焦点を当てたドキュメントに再構成
+  - nxt_gen/ と mapapp/ に関する記載を全て削除（今後大幅変更予定のため）
+  - タイトルを「プロジェクト全体像」→「基礎データパイプライン」に変更
+  - 冒頭の問題点セクション削除（3つの実装混在という前提が不要に）
+  - データフロー図とディレクトリ構造を src/ と data/ のみに簡素化
+  - 問題点・改善提案・まとめセクションを削除（src/のみに焦点を当てるため不要）
+- **データフロー図の改善**:
+  - データフローセクションをドキュメント冒頭（概要の直後）に移動
+  - フローの方向を左→右から上→下に変更（flowchart TD）
+  - 具体的なスクリプト名（make_base_data.py、make_frontend_master.py）を明記
+  - 具体的な出力ファイル名（*.csv）を全て明記
+  - 処理ステップとデータファイルを色分けして視認性を向上
 
 ---
 

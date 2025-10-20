@@ -18,11 +18,11 @@
 
 ### メインパイプライン処理フロー
 
-以下は `src/main.py` の実行フローを示した図です：
+以下は `src/make_base_data.py` の実行フローを示した図です：
 
 ```mermaid
 flowchart TD
-    A[開始: python src/main.py] --> B{駅マスタCSV<br/>存在チェック}
+    A[開始: python src/make_base_data.py] --> B{駅マスタCSV<br/>存在チェック}
     
     B -->|なし| C[TravelTownスクレイピング<br/>関東地方の路線・駅マスタ取得]
     B -->|あり| D[既存ファイル使用]
@@ -267,7 +267,7 @@ stationscraper
 
 ## 主要ファイル説明
 
-### `src/main.py`
+### `src/make_base_data.py`
 - 全体の実行フローをまとめたエントリーポイント
 
 ### `src/scrapers/`
@@ -330,7 +330,7 @@ GOOGLE_MAPS_KEY=YOUR_GOOGLE_MAPS_API_KEY
 
 ### メインスクリプトの実行
 ```bash
-python src/main.py
+python src/make_base_data.py
 ```
 - `traveltowns_scraper.py`: 路線・駅マスタ取得
 - `suumo_scraper.py`: 家賃相場取得

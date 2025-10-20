@@ -23,30 +23,28 @@ def calculate_min_route(df: pd.DataFrame, to_station: str) -> pd.DataFrame:
     駅一覧DataFrameから各駅->to_stationまでの最小乗り換え回数・所要時間を取得する。
 
     Args:
-        df: 駅一覧DataFrame (line, station, price列を含む)
+        df: 駅一覧DataFrame (line, station, 列を含む)
         to_station: 目的地の駅名
 
     Returns:
-        pd.DataFrame: 経路情報DataFrame (line, price, from, to, trans, min列)
+        pd.DataFrame: 経路情報DataFrame (line, from, to, trans, min列)
     """
     records = []
     for idx, row in df.iterrows():
         from_station = row['station']
         line = row['line']
-        price = row['price']
-        if pd.isna(price):
-            continue
+
         # Ekispert呼び出し
         route_info = get_minimum_route_info_between_stations(
             from_station, to_station)
         if route_info is None:
             continue
         trans, minutes = route_info
-        print([line, price, from_station, to_station, trans, minutes])
-        records.append([line, price, from_station, to_station, trans, minutes])
+        print([line, from_station, to_station, trans, minutes])
+        records.append([line, from_station, to_station, trans, minutes])
 
     out_df = pd.DataFrame(
-        records, columns=['line', 'price', 'from', 'to', 'trans', 'min'])
+        records, columns=['line', 'from', 'to', 'trans', 'min'])
 
     return out_df
 

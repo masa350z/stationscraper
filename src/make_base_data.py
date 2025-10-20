@@ -47,7 +47,7 @@ station_coord_price_df.to_csv(
 # 5. 各目的地駅への経路計算（既存ファイルがあればキャッシュから読み込み）
 for to_station in list(WALK_MINUTES.keys()):
     output_path = os.path.join(
-        data_dir, "calclated_routes", f"calclated_routes_{to_station}.csv"
+        data_dir, "calculated_routes", f"calculated_routes_{to_station}.csv"
     )
     df = get_or_calculate_route(station_coord_price_df, to_station, output_path)
     df.to_csv(output_path, index=False)

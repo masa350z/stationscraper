@@ -26,14 +26,14 @@ This is a **hobby/learning project**, not enterprise software. Priority is **sim
 5. **No orphaned code**: Remove empty files like `src/apis/analysis.py` immediately
 
 ## Project Structure & Module Organization
-- `src/`: Data pipeline (entry `main.py`), scrapers (`scrapers/`), APIs (`apis/`), processing (`pipeline/`), config (`config.py`).
+- `src/`: Data pipeline (entry `make_base_data.py`), scrapers (`scrapers/`), APIs (`apis/`), processing (`pipeline/`), config (`config.py`).
 - `data/`: Inputs and generated CSVs (e.g., `output/price_info`, `output/route_info`, `output/merged`).
 - `mapapp/`: Dockerized web app (Flask + Leaflet) for visualization.
 - `.env`: API keys. Never commit this file.
 
 ## Build, Test, and Development Commands
 - Setup: `python -m venv venv && source venv/bin/activate && pip install -r requirements.txt` (ensure `python-dotenv` is installed).
-- Run pipeline: `cd src && python main.py` (generates CSVs under `data/output/`).
+- Run pipeline: `cd src && python make_base_data.py` (generates CSVs under `data/output/`).
 - Run web app: `cd mapapp && docker-compose up` (opens http://localhost:5000).
 - Quick checks: confirm files like `data/output/merged/merged_with_coordinates.csv` are produced.
 
