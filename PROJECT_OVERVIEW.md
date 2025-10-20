@@ -70,7 +70,9 @@ flowchart TD
         COMBINE --> OUT6
     end
 
-    STEP2 --> END([完了])
+    STEP2 --> OPTIONAL[Web可視化<br/>frontend/<br/>※オプション]
+
+    OPTIONAL --> END([完了])
 
     style OUT1 fill:#fff9c4
     style OUT2 fill:#fff9c4
@@ -80,12 +82,14 @@ flowchart TD
     style OUT6 fill:#c8e6c9
     style START fill:#e1f5fe
     style END fill:#e1f5fe
+    style OPTIONAL fill:#e8f5e9
 ```
 
 **凡例**:
 - 黄色: 中間データファイル
 - 緑色: 最終出力ファイル（フロントエンド用マスター）
-- 青色: 開始/完了
+- 水色: 開始/完了
+- 薄緑: オプション処理（Web可視化）
 
 ---
 
@@ -326,58 +330,6 @@ JR中央・総武線各駅停車,三鷹,虎ノ門ヒルズ,1,58,35.7027156,139.5
 JR中央・総武線各駅停車,吉祥寺,虎ノ門ヒルズ,1,55,35.7031485,139.5798087,12.0,4
 ```
 
----
-
-### レガシーCSVファイル（現在は生成されていない）
-
-以下のファイルは過去のバージョンで生成されていましたが、現在の実装では生成されていません。
-
-##### route_info_*.csv ⚠️ **レガシー**
-
-**保存先**: `data/output/route_info/route_info_{目的地駅名}.csv`
-
-**現状**: 現在の `src/make_base_data.py` では生成されていません。`calculated_routes/` に置き換えられました。
-
-**過去の用途**: 各駅から目的地への経路情報（徒歩時間加算済み）
-
-##### merged_info_one_room.csv ⚠️ **レガシー**
-
-**保存先**: `data/output/merged/merged_info_one_room.csv`
-
-**現状**: 現在の `src/make_base_data.py` では生成されていません。
-
-**過去の用途**: 全目的地の経路情報を統合したデータ
-
----
-
-#### 将来の実装予定
-
-以下の機能は現在実装されていませんが、実装予定です：
-
-1. **徒歩時間を考慮した通勤時間DataFrame作成（全目的地統合版）**
-   - 全目的地の `calculated_routes_{駅名}.csv` を統合
-   - 新カラム `total_commute_time` = `min` + `walk_min`
-
-2. **複数条件での絞り込み処理**
-   - 家賃上限、通勤時間上限、乗換回数上限などのフィルタリング
-   - フィルタリング済みデータを別ファイルに保存
-
-#### 改善済み
-- ✓ 空ファイル（analysis.py、visualization.py）を削除（2025年10月19日）
-- ✓ Jupyterノートブック的構造を整理し、メインパイプラインを関数化（2025年10月19日）
-- ✓ ジオコーディング処理をパイプラインに統合、既存データ活用により効率化（2025年10月19日）
-- ✓ 路線名の表記揺れを完全解決（44.4% → 78.1%）、正規化ロジックを実装（2025年10月19日）
-- ✓ 中間CSV廃止、make_merged_data()をメモリ内処理に簡素化（2025年10月19日）
-- ✓ main.pyを temp.py ベースに書き換え、calculated_routes/ に出力（2025年10月20日）
-- ✓ get_or_calculate_route() ヘルパー関数追加でキャッシュ対応（2025年10月20日）
-- ✓ station_coord_price_{ROOM_TYPE}.csv をパイプラインで生成・保存（2025年10月20日）
-- ✓ **フロントエンド用マスターCSV作成**（2025年10月20日）
-  - `make_frontend_master.py` を作成
-  - オフィスエリアごと（虎ノ門/東京/大塚）のマスターデータを生成
-  - 座標・価格・徒歩時間を統合したWebアプリ用最終データセット
-
----
-
 ## ディレクトリ構造
 
 ```
@@ -387,6 +339,14 @@ stationscraper/
 ├── CLAUDE.md                               # Claude Code向けプロジェクト説明
 ├── README.md                               # プロジェクト概要
 ├── PROJECT_OVERVIEW.md                     # 本ドキュメント
+│
+├── frontend/                               # Web可視化アプリ（スタンドアローン）
+│   ├── app.py                             # Flask アプリケーション
+│   ├── config.py                          # 設定ファイル
+│   ├── requirements.txt                   # 依存パッケージ
+│   ├── README.md                          # 使い方
+│   └── templates/
+│       └── index.html                     # Leaflet.js マップUI（3モード切替機能付き）
 │
 ├── data/                                   # データストレージ
 │   ├── station_master/
@@ -474,98 +434,3 @@ python make_frontend_master.py
 
 ---
 
-## 変更履歴
-
-### 2025年10月19日（リファクタリング第4弾: ディレクトリ・ファイル名統一）
-- **ディレクトリ名変更**: `data/station_price/` → `data/price_by_station/` (日本人にも馴染みやすい命名に統一)
-- **CSVファイル名変更**: `station_price_*.csv` → `price_by_station_*.csv` (3ファイル)
-- **コード修正**: `src/functions.py`, `nxt_gen/config.py` のパス参照を更新
-
-### 2025年10月19日（リファクタリング第3弾: 中間CSV廃止）
-- **price_by_station_*.csv の完全廃止**: 負の遺産であった中間CSVファイルを削除
-  - 壊れたCSVキャッシュによるバグを根絶
-  - `make_merged_data()` 関数を約30行→約15行に簡素化
-  - CSV保存・読み込みロジックを完全削除
-- **nxt_gen/のデータ読み込みロジック改修**:
-  - `nxt_gen/data_loader.py` の `load_price_data()` を書き換え
-  - 元データ（`station_address_with_coordinates.csv` + `station_price_one_room.csv`）から直接生成
-  - `src/pipeline/data_cleaning.py` の正規化ロジックを再利用
-- **設定ファイル更新**:
-  - `nxt_gen/config.py`: `PRICE_DATA_PATH` → `PRICE_ORIGINAL_PATH` に変更
-- **不要関数の削除**:
-  - `src/pipeline/data_cleaning.py` の `merge_station_info()` 関数を削除（未使用）
-  - `src/functions.py` から対応するimportを削除
-- **効果**:
-  - コード行数削減: 約50行
-  - ファイルI/O削減: 中間ファイルの読み書きが不要
-  - 保守性向上: キャッシュ問題の完全解消
-  - データ整合性: 常に最新の正規化ロジックが適用される
-
-### 2025年10月19日（リファクタリング第2弾）
-- **座標付き駅マスタの早期生成**: パイプラインで `station_address.csv` 作成後すぐに座標情報を付与する仕組みを実装
-- **geocode_station() 関数追加**: 複数のクエリパターン（路線名+駅名、駅名のみなど）で座標取得を試行し成功率を向上
-- **add_geocode_to_station_master() 関数追加**: 既存座標データを活用し、欠損駅のみ新規取得する効率的な実装
-  - API使用量を節約（既存データがある場合は欠損駅のみ取得）
-  - 進捗表示とレート制限対応を実装
-- **ジオコーディング処理の統合**: コメントアウトされていた座標取得処理をパイプラインに正式統合
-- **不要コードの削除**: 末尾のデバッグ用コードとコメントアウトされたコードを削除
-- **geocode_missing_stations.py と missing_coords_geocoded.csv を削除**: 機能がmain.pyに統合されたため冗長なファイルを削除
-
-### 2025年10月19日（リファクタリング第1弾）
-- **nominatim削除**: 未使用のnominatimディレクトリとドキュメント記載を削除（Google Maps API使用のため不要）
-- **line_url.csv削除**: 過去の実装で使われていた中間ファイルを削除（現在は`scrape_traveltowns_kanto()`関数に統合済み）
-- **src/make_base_data.pyリファクタリング**: メインパイプラインを5つのヘルパー関数（`make_*()`）に分割し可読性を向上
-
-### 2025年10月20日（main.py 実装更新）
-- **main.py を temp.py ベースに書き換え**:
-  - 処理フローを明確化: 駅マスタ取得→座標付与→家賃取得→マージ→経路計算の5ステップ
-  - `make_route_data()` 削除 → `calculate_min_route()` + ループ処理に変更
-  - 出力先を `data/calculated_routes/calculated_routes_{駅名}.csv` に変更（レガシーの `route_info/` から移行）
-  - `station_coord_price_{ROOM_TYPE}.csv` の保存処理を追加（ステップ4）
-- **get_or_calculate_route() ヘルパー関数追加**（`src/functions.py`）:
-  - 既存ファイルがあれば読み込み、なければ計算する仕組み
-  - API 呼び出しを削減しパフォーマンス向上
-  - ログ出力で処理状況を可視化（"既存ファイルを読み込みました" / "経路情報を計算中..."）
-- **将来の実装予定を明記**:
-  - 徒歩時間を考慮した通勤時間DataFrame作成（予定）
-  - 複数条件での絞り込み処理（予定）
-  - フロントエンド用マスターCSV作成（予定）
-- **ドキュメント更新**: PROJECT_OVERVIEW.md を現在の実装状況に正確に反映
-
-### 2025年10月20日（パイプライン責任分離とリネーミング）
-- **make_frontend_master.py 作成**:
-  - オフィスエリアごとのフロントエンド用マスターデータ生成機能を分離
-  - 虎ノ門、東京、大塚の3つのオフィスエリア向けにデータを統合
-  - 座標・価格・徒歩時間を追加した最終データセットを生成
-  - `data/frontend_master/frontend_master_{office}_{ROOM_TYPE}.csv` を出力
-- **main.py → make_base_data.py リネーム**:
-  - 汎用的な基礎データ準備スクリプトであることを明確化
-  - make_frontend_master.py と命名規則を統一（make_xxx）
-  - 処理フローを2段階に分離（基礎データ準備 → フロントエンドデータ生成）
-- **temp.py の位置付け変更**:
-  - make_frontend_master.py への移行元として残置
-  - ファイル冒頭に非推奨・削除予定を明記
-- **ドキュメント更新**:
-  - CLAUDE.md、AGENTS.md、PROJECT_OVERVIEW.md、README.md を更新
-  - make_frontend_master.py の説明とデータ構造を追加
-  - 実行方法を2段階フローに変更
-
-### 2025年10月20日（ドキュメントスコープの明確化）
-- **PROJECT_OVERVIEW.md のスコープ変更**:
-  - 基礎データパイプライン（src/）のみに焦点を当てたドキュメントに再構成
-  - nxt_gen/ と mapapp/ に関する記載を全て削除（今後大幅変更予定のため）
-  - タイトルを「プロジェクト全体像」→「基礎データパイプライン」に変更
-  - 冒頭の問題点セクション削除（3つの実装混在という前提が不要に）
-  - データフロー図とディレクトリ構造を src/ と data/ のみに簡素化
-  - 問題点・改善提案・まとめセクションを削除（src/のみに焦点を当てるため不要）
-- **データフロー図の改善**:
-  - データフローセクションをドキュメント冒頭（概要の直後）に移動
-  - フローの方向を左→右から上→下に変更（flowchart TD）
-  - 具体的なスクリプト名（make_base_data.py、make_frontend_master.py）を明記
-  - 具体的な出力ファイル名（*.csv）を全て明記
-  - 処理ステップとデータファイルを色分けして視認性を向上
-
----
-
-**作成者**: Claude Code
-**最終更新**: 2025年10月20日

@@ -57,11 +57,11 @@ pip install python-dotenv
 
 ### Web Application
 ```bash
-# Run the web visualization app with Docker
-cd mapapp
-docker-compose up
+# Run the web visualization app (Flask + Leaflet.js)
+cd frontend
+python app.py
 
-# Access the web app at http://localhost:5000
+# Access the web app at http://localhost:5002
 ```
 
 ## Architecture Overview
@@ -79,11 +79,11 @@ This is a dual-component system for analyzing Tokyo area station data:
 - **Data Processing**: `src/pipeline/` - Merging, filtering, and analysis of collected data
 - **Configuration**: `src/config.py` - Environment variables, project constants, and office area definitions
 
-### 2. Web Visualization (`mapapp/`)
-- **Backend**: Flask server (`server.py`) with PostgreSQL database
-- **Frontend**: Leaflet.js-based map interface
-- **Database**: PostgreSQL with station data (coordinates, prices, commute times)
-- **Deployment**: Docker Compose setup with auto-initialization
+### 2. Web Visualization (`frontend/`)
+- **Backend**: Flask server (`app.py`) with CSV-based data loading
+- **Frontend**: Leaflet.js map interface with 3-mode display (price/time/both)
+- **Data**: Direct CSV reading from frontend_master files via pandas
+- **Deployment**: Simple Python server (no Docker/DB required)
 
 ## Data Flow
 
@@ -99,8 +99,8 @@ This is a dual-component system for analyzing Tokyo area station data:
 7. **Enrichment**: Adds coordinates, prices, and walking times
 8. **Output**: `data/frontend_master/frontend_master_{office}_{room_type}.csv`
 
-### Stage 3: Visualization
-9. **Web App**: Loads frontend master data into PostgreSQL for interactive filtering
+### Stage 3: Visualization (Optional)
+9. **Web App (`frontend/`)**: Loads frontend master CSV directly via pandas for interactive filtering and map display
 
 ## Key Configuration
 
@@ -139,19 +139,6 @@ Currently configured to analyze commute times to stations defined in `WALK_MINUT
 - `data/output/route_info/`: Old route data location
 - `data/output/merged/`: Old merged data location
 
-### Database Schema (Web App)
-```sql
-CREATE TABLE stations (
-    id SERIAL PRIMARY KEY,
-    line TEXT,
-    station TEXT,
-    lat DOUBLE PRECISION,
-    lng DOUBLE PRECISION,
-    price DOUBLE PRECISION,
-    commute_time INT
-);
-```
-
 ## Important Notes
 
 ### Pipeline Behavior
@@ -164,6 +151,7 @@ CREATE TABLE stations (
 - **Office areas**: Frontend data is generated for three office areas: Toranomon (8 stations), Tokyo (7 stations), Otsuka (1 station)
 - **Hardcoded areas**: Office area definitions in `config.py` are intentionally hardcoded for this personal project
 
-### Web App
-- Web app expects a `stations.csv` file in `mapapp/` directory for database initialization
-- Can use either `calculated_routes_*.csv` or `frontend_master_*.csv` as input
+### Web Visualization
+- **Frontend app** (`frontend/`) loads `frontend_master_*.csv` directly via pandas
+- No database setup required - runs immediately with `python app.py`
+- Interactive map with 3-mode display: price only, time only, or both (split circle markers)

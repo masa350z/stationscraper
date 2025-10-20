@@ -142,6 +142,15 @@
             display: none;
         }
 
+        /* SVGマーカー用スタイル */
+        .custom-svg-icon {
+            cursor: pointer;
+        }
+
+        .custom-svg-icon svg {
+            filter: drop-shadow(0 1px 2px rgba(0,0,0,0.3));
+        }
+
         /* カラーバー/凡例のスタイル */
         .color-legend {
             background: white;
@@ -149,6 +158,7 @@
             border-radius: 5px;
             box-shadow: 0 0 15px rgba(0,0,0,0.2);
             font-family: 'Helvetica Neue', Arial, sans-serif;
+            margin-bottom: 10px;
         }
 
         .color-legend-title {
@@ -203,6 +213,11 @@
             color: #7f8c8d;
             font-style: italic;
         }
+
+        /* 凡例を非表示にするクラス */
+        .legend-hidden {
+            display: none !important;
+        }
     </style>
 </head>
 <body>
@@ -211,6 +226,7 @@
             <div class="control-group">
                 <button onclick="switchMode('price')">家賃を表示</button>
                 <button onclick="switchMode('time')">通勤時間を表示</button>
+                <button onclick="switchMode('both')">両方を表示</button>
             </div>
             <div class="control-group">
                 <label>家賃上限:</label>
@@ -242,16 +258,36 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
     <script>
-        // 表示モード（"price" = 家賃、"time" = 通勤時間）
-        let currentMode = "price";
+        // 表示モード（"price" = 家賃のみ、"time" = 通勤時間のみ、"both" = 両方）
+        let currentMode = "both";
 
         /**
          * 表示モード切り替え
-         * @param {string} mode - "price" または "time"
+         * @param {string} mode - "price", "time", "both"
          */
         function switchMode(mode) {
             currentMode = mode;
+            updateLegendVisibility();
             applyFilter();
+        }
+
+        /**
+         * 凡例の表示/非表示を切り替え
+         */
+        function updateLegendVisibility() {
+            const priceLegend = document.getElementById('price-legend-control');
+            const timeLegend = document.getElementById('time-legend-control');
+
+            if (currentMode === 'price') {
+                priceLegend.classList.remove('legend-hidden');
+                timeLegend.classList.add('legend-hidden');
+            } else if (currentMode === 'time') {
+                priceLegend.classList.add('legend-hidden');
+                timeLegend.classList.remove('legend-hidden');
+            } else { // both
+                priceLegend.classList.remove('legend-hidden');
+                timeLegend.classList.remove('legend-hidden');
+            }
         }
 
         /**
@@ -319,18 +355,19 @@
         // マーカーグループ
         let markerGroup = L.layerGroup().addTo(map);
 
-        // カラーバー/凡例のカスタムコントロールを作成
-        L.Control.ColorLegend = L.Control.extend({
+        // カラーバー/凡例のカスタムコントロールを作成（家賃用）
+        L.Control.PriceLegend = L.Control.extend({
             onAdd: function(map) {
                 const div = L.DomUtil.create('div', 'color-legend');
+                div.id = 'price-legend-control';
                 div.innerHTML = `
-                    <div class="color-legend-title" id="legend-title">家賃相場</div>
+                    <div class="color-legend-title">家賃相場（左半円）</div>
                     <div class="color-legend-gradient"></div>
-                    <div class="color-legend-labels" id="legend-labels">
-                        <div class="color-legend-label max" id="legend-max">読み込み中...</div>
-                        <div class="color-legend-label min" id="legend-min"></div>
+                    <div class="color-legend-labels">
+                        <div class="color-legend-label max" id="legend-price-max">読み込み中...</div>
+                        <div class="color-legend-label min" id="legend-price-min"></div>
                     </div>
-                    <div class="color-legend-note" id="legend-note">灰色 = 情報なし</div>
+                    <div class="color-legend-note">灰色 = 情報なし</div>
                 `;
                 return div;
             },
@@ -339,8 +376,29 @@
             }
         });
 
-        // カラーバーを地図に追加
-        new L.Control.ColorLegend().addTo(map);
+        // カラーバー/凡例のカスタムコントロールを作成（通勤時間用）
+        L.Control.TimeLegend = L.Control.extend({
+            onAdd: function(map) {
+                const div = L.DomUtil.create('div', 'color-legend');
+                div.id = 'time-legend-control';
+                div.innerHTML = `
+                    <div class="color-legend-title">通勤時間（右半円）</div>
+                    <div class="color-legend-gradient"></div>
+                    <div class="color-legend-labels">
+                        <div class="color-legend-label max" id="legend-time-max">読み込み中...</div>
+                        <div class="color-legend-label min" id="legend-time-min"></div>
+                    </div>
+                `;
+                return div;
+            },
+            options: {
+                position: 'topright'
+            }
+        });
+
+        // カラーバーを地図に追加（2つ）
+        new L.Control.PriceLegend().addTo(map);
+        new L.Control.TimeLegend().addTo(map);
 
         // 統計情報を更新
         function updateStats(count) {
@@ -372,54 +430,76 @@
                 .then(stations => {
                     console.log(`駅データ取得完了: ${stations.length}駅`);
 
-                    // 現在のモードに応じて対象の値を取得
-                    let values;
-                    if (currentMode === "price") {
-                        values = stations
-                            .filter(s => s.price !== null)
-                            .map(s => s.price);
-                    } else {
-                        // time mode - total_min は常に存在する前提
-                        values = stations.map(s => s.total_min);
+                    // 家賃の最小値・最大値を計算
+                    const pricesWithData = stations
+                        .filter(s => s.price !== null)
+                        .map(s => s.price);
+
+                    let minPrice, maxPrice;
+                    if (pricesWithData.length > 0) {
+                        minPrice = Math.min(...pricesWithData);
+                        maxPrice = Math.max(...pricesWithData);
+                        console.log(`家賃範囲: ${minPrice}万円 - ${maxPrice}万円`);
                     }
 
-                    if (values.length === 0) {
-                        // データなし - 終了
-                        document.getElementById('loading').style.display = 'none';
-                        return;
-                    }
-
-                    const minVal = Math.min(...values);
-                    const maxVal = Math.max(...values);
-
-                    console.log(`${currentMode === "price" ? "家賃" : "通勤時間"}範囲: ${minVal}${currentMode === "price" ? "万円" : "分"} - ${maxVal}${currentMode === "price" ? "万円" : "分"}`);
+                    // 通勤時間の最小値・最大値を計算
+                    const times = stations.map(s => s.total_min);
+                    const minTime = Math.min(...times);
+                    const maxTime = Math.max(...times);
+                    console.log(`通勤時間範囲: ${minTime}分 - ${maxTime}分`);
 
                     // 各駅にマーカーを配置
                     stations.forEach(station => {
-                        let val, color;
-
-                        if (currentMode === "price") {
-                            if (station.price !== null) {
-                                val = station.price;
-                                color = getJetColor(val, minVal, maxVal);
-                            } else {
-                                color = '#808080'; // 家賃情報がない場合は灰色
-                            }
+                        // 家賃の色を取得
+                        let priceColor;
+                        if (station.price !== null && pricesWithData.length > 0) {
+                            priceColor = getJetColor(station.price, minPrice, maxPrice);
                         } else {
-                            // time mode
-                            val = station.total_min;
-                            color = getJetColor(val, minVal, maxVal);
+                            priceColor = '#808080'; // 家賃情報なしは灰色
                         }
 
-                        // マーカーを作成
-                        const marker = L.circleMarker([station.lat, station.lng], {
-                            radius: 20,
-                            fillColor: color,
-                            color: '#fff',
-                            weight: 1,
-                            opacity: 1,
-                            fillOpacity: 0.7
-                        });
+                        // 通勤時間の色を取得
+                        const timeColor = getJetColor(station.total_min, minTime, maxTime);
+
+                        // モードに応じてマーカーを作成
+                        let marker;
+                        if (currentMode === 'price') {
+                            // 家賃のみ表示（単色円マーカー）
+                            marker = L.circleMarker([station.lat, station.lng], {
+                                radius: 20,
+                                fillColor: priceColor,
+                                color: '#fff',
+                                weight: 1,
+                                opacity: 1,
+                                fillOpacity: 0.7
+                            });
+                        } else if (currentMode === 'time') {
+                            // 通勤時間のみ表示（単色円マーカー）
+                            marker = L.circleMarker([station.lat, station.lng], {
+                                radius: 20,
+                                fillColor: timeColor,
+                                color: '#fff',
+                                weight: 1,
+                                opacity: 1,
+                                fillOpacity: 0.7
+                            });
+                        } else {
+                            // 両方表示（SVG半円マーカー）
+                            const svgIcon = L.divIcon({
+                                html: `
+                                    <svg width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+                                        <!-- 左半円 (家賃) -->
+                                        <path d="M 20 2 A 18 18 0 0 0 20 38 Z" fill="${priceColor}" stroke="white" stroke-width="1"/>
+                                        <!-- 右半円 (通勤時間) -->
+                                        <path d="M 20 2 A 18 18 0 0 1 20 38 Z" fill="${timeColor}" stroke="white" stroke-width="1"/>
+                                    </svg>
+                                `,
+                                className: 'custom-svg-icon',
+                                iconSize: [40, 40],
+                                iconAnchor: [20, 20]
+                            });
+                            marker = L.marker([station.lat, station.lng], { icon: svgIcon });
+                        }
 
                         // ポップアップの内容を作成
                         const popupContent = `
@@ -452,28 +532,22 @@
                         markerGroup.addLayer(marker);
                     });
 
-                    // カラーバーの凡例を更新
-                    if (currentMode === "price") {
-                        document.getElementById('legend-title').textContent = '家賃相場';
-                        if (values.length > 0) {
-                            document.getElementById('legend-max').textContent = `最高: ${maxVal.toFixed(1)}万円`;
-                            document.getElementById('legend-min').textContent = `最低: ${minVal.toFixed(1)}万円`;
-                        } else {
-                            document.getElementById('legend-max').textContent = 'データなし';
-                            document.getElementById('legend-min').textContent = '';
-                        }
-                        document.getElementById('legend-note').textContent = '灰色 = 情報なし';
+                    // カラーバーの凡例を更新（家賃用）
+                    if (pricesWithData.length > 0) {
+                        document.getElementById('legend-price-max').textContent = `最高: ${maxPrice.toFixed(1)}万円`;
+                        document.getElementById('legend-price-min').textContent = `最低: ${minPrice.toFixed(1)}万円`;
                     } else {
-                        // time mode
-                        document.getElementById('legend-title').textContent = '通勤時間';
-                        if (values.length > 0) {
-                            document.getElementById('legend-max').textContent = `最長: ${maxVal}分`;
-                            document.getElementById('legend-min').textContent = `最短: ${minVal}分`;
-                        } else {
-                            document.getElementById('legend-max').textContent = 'データなし';
-                            document.getElementById('legend-min').textContent = '';
-                        }
-                        document.getElementById('legend-note').textContent = ''; // timeモードでは注釈不要
+                        document.getElementById('legend-price-max').textContent = 'データなし';
+                        document.getElementById('legend-price-min').textContent = '';
+                    }
+
+                    // カラーバーの凡例を更新（通勤時間用）
+                    if (times.length > 0) {
+                        document.getElementById('legend-time-max').textContent = `最長: ${maxTime}分`;
+                        document.getElementById('legend-time-min').textContent = `最短: ${minTime}分`;
+                    } else {
+                        document.getElementById('legend-time-max').textContent = 'データなし';
+                        document.getElementById('legend-time-min').textContent = '';
                     }
 
                     // 統計情報を更新
